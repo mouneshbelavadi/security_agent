@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String         @id @default(cuid())
+  name               String
+  username           String         @unique
+  passwordHash       String
+  role               String         @default("GUARD") // "GUARD", "EMPLOYEE", "ADMIN"
+  isActive           Boolean        @default(true)
+  mustChangePassword Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  employee           Employee?
+  visitRequests      VisitRequest[] @relation("CreatedByUser")
+}
+
+model Employee {
+  id            String         @id @default(cuid())
+  userId        String?        @unique
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name          String
+  email         String         @unique
+  department    String
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  visitRequests VisitRequest[]
+}
+
+enum IdType {
+  AADHAAR
+  DRIVING_LICENCE
+  VOTER_ID
+  PASSPORT
+  PAN
+  OTHER
+}
+
+model VisitRequest {
+  id              String     @id @default(cuid())
+  visitorName     String
+  visitorEmail    String
+  visitorPhone    String
+  idType          IdType     @default(AADHAAR)
+  purpose         String?
+  hostId          String
+  host            Employee   @relation(fields: [hostId], references: [id])
+  idPhotoPath     String
+  selfiePath      String?
+  status          String     @default("WAITING_HOST") // WAITING_HOST, APPROVED, DENIED, EXPIRED, ENTERED, LOCKED, EXITED
+  expiresAt       DateTime?
+  otpHash         String?
+  otpExpiresAt    DateTime?
+  otpAttempts     Int        @default(0)
+  createdByUserId String
+  createdByUser   User       @relation("CreatedByUser", fields: [createdByUserId], references: [id])
+  createdAt       DateTime   @default(now())
+  approvedAt      DateTime?
+  enteredAt       DateTime?
+  exitedAt        DateTime?
+  emailFailed     Boolean    @default(false)
+  auditLogs       AuditLog[]
+}
+
+model SmsOutbox {
+  id        String   @id @default(cuid())
+  mobile    String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model EmailOutbox {
+  id        String   @id @default(cuid())
+  toEmail   String
+  toName    String
+  subject   String
+  htmlBody  String
+  textBody  String
+  requestId String?
+  createdAt DateTime @default(now())
+}
+
+model UploadedFile {
+  id        String   @id @default(cuid())
+  filename  String   @unique
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  visitRequestId String
+  visitRequest   VisitRequest @relation(fields: [visitRequestId], references: [id], onDelete: Cascade)
+  action         String
+  actorType      String       // "GUARD", "EMPLOYEE", "ADMIN", "SYSTEM"
+  details        String?
+  createdAt      DateTime     @default(now())
+}
