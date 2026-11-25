@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { verifyOtp, isExpired } from "@/lib/crypto";
+import { verifyOtp } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
+import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
 import { z } from "zod";
 
 const verifySchema = z.object({
@@ -52,26 +53,24 @@ export async function POST(
       );
     }
 
-    if (visit.status !== "APPROVED") {
+    const currentStatus = await checkAndExpireVisit({
+      id: visit.id,
+      visitorId: visit.visitorId,
+      status: visit.status,
+      expiresAt: visit.expiresAt,
+      otpExpiresAt: visit.otpExpiresAt,
+    });
+
+    if (currentStatus === "EXPIRED") {
       return NextResponse.json(
-        { error: `Cannot verify OTP. Current request status is ${visit.status}.`, status: visit.status },
+        { error: "OTP has expired. Please initiate a new visit request.", status: "EXPIRED" },
         { status: 400 }
       );
     }
 
-    if (isExpired(visit.otpExpiresAt)) {
-      await db.visitRequest.update({
-        where: { id: visit.id },
-        data: { status: "EXPIRED" },
-      });
-      await logAudit({
-        visitRequestId: visit.id,
-        action: "STATUS_EXPIRED_OTP_TIMEOUT",
-        actorType: "SYSTEM",
-        details: "OTP expired before verification.",
-      });
+    if (currentStatus !== "APPROVED") {
       return NextResponse.json(
-        { error: "OTP has expired. Please initiate a new visit request.", status: "EXPIRED" },
+        { error: `Cannot verify OTP. Current request status is ${currentStatus}.`, status: currentStatus },
         { status: 400 }
       );
     }
@@ -83,7 +82,7 @@ export async function POST(
       );
     }
 
-    // Verify OTP
+    const actorType = session.role === "ADMIN" ? "ADMIN" : "GUARD";
     const isMatch = verifyOtp(otp, visit.otpHash);
 
     if (!isMatch) {
@@ -101,11 +100,14 @@ export async function POST(
 
       await logAudit({
         visitRequestId: visit.id,
+        visitorId: visit.visitorId,
+        actorUserId: session.userId,
+        actorName: session.name,
         action: isNowLocked ? "STATUS_LOCKED_FAILED_OTP" : "FAILED_OTP_ATTEMPT",
-        actorType: "GUARD",
+        actorType,
         details: isNowLocked
-          ? `3 incorrect OTP attempts. Request locked by Guard ${session.name}.`
-          : `Incorrect OTP entered by Guard ${session.name} (Attempt ${updatedAttempts} of 3).`,
+          ? `3 incorrect OTP attempts. Request locked by ${session.name} (${session.username}).`
+          : `Incorrect OTP entered by ${session.name} (${session.username}) (Attempt ${updatedAttempts} of 3).`,
       });
 
       if (isNowLocked) {
@@ -129,7 +131,6 @@ export async function POST(
       );
     }
 
-    // OTP Verified! Allow Entry!
     const enteredAt = new Date();
     await db.visitRequest.update({
       where: { id: visit.id },
@@ -141,9 +142,12 @@ export async function POST(
 
     await logAudit({
       visitRequestId: visit.id,
+      visitorId: visit.visitorId,
+      actorUserId: session.userId,
+      actorName: session.name,
       action: "STATUS_ENTERED",
-      actorType: "GUARD",
-      details: `OTP verified successfully by Guard ${session.name}. Visitor entry allowed.`,
+      actorType,
+      details: `OTP verified successfully by ${session.name} (${session.username}). Visitor entry allowed.`,
     });
 
     return NextResponse.json({

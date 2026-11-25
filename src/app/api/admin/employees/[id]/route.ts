@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const updateEmployeeSchema = z.object({
@@ -47,6 +48,28 @@ export async function PATCH(
     const updated = await db.employee.update({
       where: { id: params.id },
       data: dataToUpdate,
+    });
+
+    if (updated.userId) {
+      const userPatch: any = {};
+      if (parsed.data.name !== undefined) userPatch.name = parsed.data.name;
+      if (parsed.data.isActive !== undefined) userPatch.isActive = parsed.data.isActive;
+      if (email) userPatch.username = email.toLowerCase();
+      if (Object.keys(userPatch).length > 0) {
+        await db.user.update({
+          where: { id: updated.userId },
+          data: userPatch,
+        }).catch(() => {});
+      }
+    }
+
+    await logAudit({
+      actorUserId: session.userId,
+      actorName: session.name,
+      targetUserId: updated.userId,
+      action: "EMPLOYEE_UPDATED",
+      actorType: "ADMIN",
+      details: `Admin ${session.name} updated employee "${updated.name}" (${updated.email}) - Active: ${updated.isActive ? "Yes" : "No"}.`,
     });
 
     return NextResponse.json({ success: true, employee: updated });

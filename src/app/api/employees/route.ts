@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 import bcrypt from "bcrypt";
 import { z } from "zod";
 
@@ -83,7 +84,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Create or link User login account for employee
     const passwordHash = await bcrypt.hash(DEFAULT_DEMO_PASSWORD, 10);
     const user = await db.user.upsert({
       where: { username: emailLower },
@@ -102,7 +102,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // 2. Create Employee record linked to user
     const employee = await db.employee.create({
       data: {
         name: parsed.data.name,
@@ -111,6 +110,15 @@ export async function POST(request: Request) {
         isActive: parsed.data.isActive,
         userId: user.id,
       },
+    });
+
+    await logAudit({
+      actorUserId: session.userId,
+      actorName: session.name,
+      targetUserId: user.id,
+      action: "EMPLOYEE_CREATED",
+      actorType: "ADMIN",
+      details: `Admin ${session.name} added employee "${employee.name}" (${employee.email}, ${employee.department}).`,
     });
 
     return NextResponse.json({

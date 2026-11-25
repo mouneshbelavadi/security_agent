@@ -34,7 +34,6 @@ export async function POST(
       );
     }
 
-    // Reset expiry for host decision
     const expiresAt = getExpiryDate(env.REQUEST_EXPIRY_MINUTES);
 
     await db.visitRequest.update({
@@ -56,6 +55,8 @@ export async function POST(
       expiryMinutes: env.REQUEST_EXPIRY_MINUTES,
     });
 
+    const actorType = session.role === "ADMIN" ? "ADMIN" : "GUARD";
+
     if (emailSent) {
       await db.visitRequest.update({
         where: { id: visit.id },
@@ -64,8 +65,11 @@ export async function POST(
 
       await logAudit({
         visitRequestId: visit.id,
+        visitorId: visit.visitorId,
+        actorUserId: session.userId,
+        actorName: session.name,
         action: "EMAIL_RESENT_SUCCESS",
-        actorType: session.role === "ADMIN" ? "ADMIN" : "GUARD",
+        actorType,
         details: `Approval email resent to host ${visit.host.name} (${visit.host.email}) by ${session.name}.`,
       });
 
@@ -82,8 +86,11 @@ export async function POST(
 
       await logAudit({
         visitRequestId: visit.id,
+        visitorId: visit.visitorId,
+        actorUserId: session.userId,
+        actorName: session.name,
         action: "EMAIL_RESENT_FAILED",
-        actorType: session.role === "ADMIN" ? "ADMIN" : "GUARD",
+        actorType,
         details: `Retry approval email dispatch to ${visit.host.email} failed.`,
       });
 

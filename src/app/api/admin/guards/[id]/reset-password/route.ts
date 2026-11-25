@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/crypto";
+import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const resetSchema = z.object({
@@ -30,12 +31,22 @@ export async function POST(
     const { newPassword } = parsed.data;
     const passwordHash = await hashPassword(newPassword);
 
-    await db.user.update({
+    const updatedGuard = await db.user.update({
       where: { id: params.id },
       data: {
         passwordHash,
         mustChangePassword: true, // Force change on next login
       },
+      select: { id: true, name: true, username: true },
+    });
+
+    await logAudit({
+      actorUserId: session.userId,
+      actorName: session.name,
+      targetUserId: updatedGuard.id,
+      action: "GUARD_PASSWORD_RESET",
+      actorType: "ADMIN",
+      details: `Admin ${session.name} reset password for "${updatedGuard.name}" (${updatedGuard.username}).`,
     });
 
     return NextResponse.json({ success: true, message: "Password reset successfully" });

@@ -39,9 +39,12 @@ export async function POST(
 
     await logAudit({
       visitRequestId: visit.id,
+      visitorId: visit.visitorId,
+      actorUserId: session.userId,
+      actorName: session.name,
       action: "STATUS_EXITED",
-      actorType: "GUARD",
-      details: `Visitor exit recorded by Guard ${session.name}.`,
+      actorType: session.role === "ADMIN" ? "ADMIN" : "GUARD",
+      details: `Visitor exit recorded by ${session.name} (${session.username}).`,
     });
 
     return NextResponse.json({

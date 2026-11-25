@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -23,11 +23,18 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
 import { Toast } from "@/components/ui/Toast";
 import { useI18n } from "@/components/I18nProvider";
+import { usePolling } from "@/lib/usePolling";
 
 interface TodayVisitor {
   id: string;
+  visitNumber?: number;
+  visitorTotalVisits?: number;
   visitorName: string;
+  visitorEmail?: string;
   visitorPhone: string;
+  idType?: string;
+  hasIdPhoto?: boolean;
+  hasIdNumber?: boolean;
   purpose?: string | null;
   status: string;
   hostName: string;
@@ -61,11 +68,7 @@ export default function GuardTodayPage() {
     }
   };
 
-  useEffect(() => {
-    fetchToday();
-    const interval = setInterval(fetchToday, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  usePolling(fetchToday, 5000);
 
   const handleRecordExit = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -201,8 +204,13 @@ export default function GuardTodayPage() {
                   {/* Card Header: Name + Status */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-lg font-bold text-ink truncate">
-                        {v.visitorName}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-lg font-bold text-ink truncate">
+                          {v.visitorName}
+                        </span>
+                        {v.visitNumber && v.visitNumber > 1 && (
+                          <Badge variant="accent">Visit #{v.visitNumber}</Badge>
+                        )}
                       </div>
                       <div className="text-sm text-ink-muted mt-0.5">
                         Host: <strong>{v.hostName}</strong> ({v.hostDepartment})
@@ -212,10 +220,17 @@ export default function GuardTodayPage() {
                     <div className="shrink-0">{getStatusBadge(v.status)}</div>
                   </div>
 
-                  {/* Card Details: Phone & Timestamps */}
-                  <div className="flex flex-wrap items-center justify-between text-xs text-ink-subtle font-mono tabular-nums pt-2 border-t border-border/60">
-                    <div className="flex items-center gap-3">
+                  {/* Card Details: Phone, Email, ID & Timestamps */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-subtle font-mono tabular-nums pt-2 border-t border-border/60">
+                    <div className="flex flex-wrap items-center gap-2.5">
                       <span>{v.visitorPhone}</span>
+                      {v.visitorEmail && <span>• {v.visitorEmail}</span>}
+                      {v.idType && (
+                        <span>
+                          • {v.idType.replace(/_/g, " ")}
+                          {v.hasIdPhoto ? " (Photo)" : v.hasIdNumber ? " (ID#)" : ""}
+                        </span>
+                      )}
                       {v.purpose && <span>• {v.purpose}</span>}
                     </div>
 

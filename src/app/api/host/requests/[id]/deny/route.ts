@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession, getAuthenticatedEmployee } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
 
 // POST /api/host/requests/[id]/deny
 export async function POST(
@@ -39,14 +40,28 @@ export async function POST(
       );
     }
 
-    if (visit.status !== "WAITING_HOST") {
+    const currentStatus = await checkAndExpireVisit({
+      id: visit.id,
+      visitorId: visit.visitorId,
+      status: visit.status,
+      expiresAt: visit.expiresAt,
+      otpExpiresAt: visit.otpExpiresAt,
+    });
+
+    if (currentStatus === "EXPIRED") {
       return NextResponse.json(
-        { error: `Request cannot be denied (current status: ${visit.status}).` },
+        { error: "This visit request has expired." },
         { status: 400 }
       );
     }
 
-    // 1. Update VisitRequest status to DENIED
+    if (currentStatus !== "WAITING_HOST") {
+      return NextResponse.json(
+        { error: `Request cannot be denied (current status: ${currentStatus}).` },
+        { status: 400 }
+      );
+    }
+
     await db.visitRequest.update({
       where: { id: visit.id },
       data: {
@@ -54,9 +69,11 @@ export async function POST(
       },
     });
 
-    // 2. Log audit trail
     await logAudit({
       visitRequestId: visit.id,
+      visitorId: visit.visitorId,
+      actorUserId: session.userId,
+      actorName: employee.name,
       action: "STATUS_DENIED_BY_EMPLOYEE",
       actorType: "EMPLOYEE",
       details: `Host employee ${employee.name} (${employee.email}) denied visitor entry.`,

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession, getAuthenticatedEmployee } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { generateOtp, hashOtp, getExpiryDate, isExpired } from "@/lib/crypto";
+import { generateOtp, hashOtp, getExpiryDate } from "@/lib/crypto";
 import { sendVisitorOtpEmail } from "@/lib/email";
 import { logAudit } from "@/lib/audit";
+import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
 import { env } from "@/lib/env";
 
 // POST /api/host/requests/[id]/approve
@@ -42,20 +43,24 @@ export async function POST(
       );
     }
 
-    if (visit.status !== "WAITING_HOST") {
+    const currentStatus = await checkAndExpireVisit({
+      id: visit.id,
+      visitorId: visit.visitorId,
+      status: visit.status,
+      expiresAt: visit.expiresAt,
+      otpExpiresAt: visit.otpExpiresAt,
+    });
+
+    if (currentStatus === "EXPIRED") {
       return NextResponse.json(
-        { error: `Request cannot be approved (current status: ${visit.status}).` },
+        { error: "This visit request has expired." },
         { status: 400 }
       );
     }
 
-    if (visit.expiresAt && isExpired(visit.expiresAt)) {
-      await db.visitRequest.update({
-        where: { id: visit.id },
-        data: { status: "EXPIRED" },
-      });
+    if (currentStatus !== "WAITING_HOST") {
       return NextResponse.json(
-        { error: "This visit request has expired." },
+        { error: `Request cannot be approved (current status: ${currentStatus}).` },
         { status: 400 }
       );
     }
@@ -89,6 +94,9 @@ export async function POST(
     // 4. Log audit trail
     await logAudit({
       visitRequestId: visit.id,
+      visitorId: visit.visitorId,
+      actorUserId: session.userId,
+      actorName: employee.name,
       action: otpEmailSent ? "STATUS_APPROVED_OTP_EMAILED" : "STATUS_APPROVED_OTP_EMAIL_FAILED",
       actorType: "EMPLOYEE",
       details: otpEmailSent

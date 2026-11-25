@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/navigation";
 import { useRouter } from "next/navigation";
 import {
@@ -20,9 +20,11 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useI18n } from "@/components/I18nProvider";
+import { usePolling } from "@/lib/usePolling";
 
 interface WaitingRequest {
   id: string;
+  visitNumber?: number;
   visitorName: string;
   visitorPhone: string;
   purpose?: string | null;
@@ -54,12 +56,7 @@ export default function GuardHomePage() {
     }
   };
 
-  useEffect(() => {
-    fetchWaiting();
-    // Live polling every 3 seconds to keep gate guard in sync
-    const interval = setInterval(fetchWaiting, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  usePolling(fetchWaiting, 5000);
 
   return (
     <GuardLayout companyName="VS Techsol" userName="Gate Security Guard">
@@ -139,10 +136,13 @@ export default function GuardHomePage() {
                   className="bg-surface border border-warning-border hover:border-warning rounded p-4.5 transition-colors duration-150 cursor-pointer shadow-none flex items-center justify-between gap-3 group"
                 >
                   <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-lg text-ink truncate group-hover:text-accent transition-colors">
                         {req.visitorName}
                       </span>
+                      {req.visitNumber && req.visitNumber > 1 && (
+                        <Badge variant="accent">Visit #{req.visitNumber}</Badge>
+                      )}
                       {req.status === "APPROVED" ? (
                         <Badge variant="success" icon={<CheckCircle2 className="w-3 h-3" />}>
                           Approved

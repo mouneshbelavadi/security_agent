@@ -43,9 +43,10 @@ async function main() {
   console.log("[1/4] Clearing visitor records, email outbox, uploaded files, and audit logs...");
   const deletedAuditLogs = await prisma.auditLog.deleteMany({});
   const deletedVisits = await prisma.visitRequest.deleteMany({});
+  const deletedVisitors = await prisma.visitor.deleteMany({});
   const deletedEmails = await prisma.emailOutbox.deleteMany({});
   const deletedUploads = await prisma.uploadedFile.deleteMany({});
-  console.log(`✔ Cleared ${deletedVisits.count} visit requests, ${deletedEmails.count} emails, ${deletedUploads.count} uploaded files, and ${deletedAuditLogs.count} audit logs.`);
+  console.log(`✔ Cleared ${deletedVisits.count} visit requests, ${deletedVisitors.count} visitor profiles, ${deletedEmails.count} emails, ${deletedUploads.count} uploaded files, and ${deletedAuditLogs.count} audit logs.`);
 
   // 2. Clean temporary visitor uploads
   console.log("[2/4] Cleaning visitor uploads directory...");

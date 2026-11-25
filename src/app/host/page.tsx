@@ -19,6 +19,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Toast } from "@/components/ui/Toast";
+import { usePolling } from "@/lib/usePolling";
 
 interface HostEmployee {
   id: string;
@@ -107,14 +108,8 @@ export default function HostDashboardPage() {
     router.refresh();
   };
 
-  // Initial fetch and 5-second polling loop
-  useEffect(() => {
-    fetchData(true);
-    const interval = setInterval(() => {
-      fetchData(false);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  // Sequential non-overlapping polling while tab is visible
+  usePolling(() => fetchData(true), 5000);
 
   const handleApprove = async (id: string) => {
     setActionLoadingId(id);

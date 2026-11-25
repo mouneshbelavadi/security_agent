@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession, createSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/crypto";
+import { logAudit, roleToActorType } from "@/lib/audit";
 import { z } from "zod";
 
 const changePasswordSchema = z
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
 
     const user = await db.user.findUnique({
       where: { id: session.userId },
+      include: {
+        employee: {
+          select: { id: true },
+        },
+      },
     });
 
     if (!user) {
@@ -59,16 +65,27 @@ export async function POST(request: Request) {
       },
     });
 
-    // Update active session cookie
     await createSession({
       id: user.id,
       name: user.name,
       username: user.username,
       role: user.role,
+      employeeId: user.employee?.id,
       mustChangePassword: false,
     });
 
-    const redirectUrl = user.role === "ADMIN" ? "/admin" : "/guard";
+    await logAudit({
+      actorUserId: user.id,
+      actorName: user.name,
+      targetUserId: user.id,
+      action: "PASSWORD_CHANGED",
+      actorType: roleToActorType(user.role),
+      details: `${user.name} (${user.username}) updated their account password.`,
+    });
+
+    let redirectUrl = "/guard";
+    if (user.role === "ADMIN") redirectUrl = "/admin";
+    else if (user.role === "EMPLOYEE") redirectUrl = "/host";
 
     return NextResponse.json({
       success: true,

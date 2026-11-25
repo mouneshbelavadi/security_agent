@@ -1,47 +1,53 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isExpired } from "@/lib/crypto";
+import { checkAndExpireVisit, getIstDayBounds } from "@/lib/visit-lifecycle";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Start of current day (local server time)
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const { start, end } = getIstDayBounds();
 
     const visits = await db.visitRequest.findMany({
       where: {
-        createdAt: { gte: startOfDay },
+        createdAt: { gte: start, lte: end },
       },
       orderBy: { createdAt: "desc" },
       include: {
         host: {
           select: { name: true, department: true },
         },
+        visitor: {
+          select: { visitCount: true },
+        },
       },
     });
 
-    // Check expiration on pending items
     const formatted = [];
     for (const v of visits) {
-      let currentStatus = v.status;
-      if (currentStatus === "WAITING_HOST" && isExpired(v.expiresAt)) {
-        currentStatus = "EXPIRED";
-        await db.visitRequest.update({ where: { id: v.id }, data: { status: "EXPIRED" } });
-      } else if (currentStatus === "APPROVED" && isExpired(v.otpExpiresAt)) {
-        currentStatus = "EXPIRED";
-        await db.visitRequest.update({ where: { id: v.id }, data: { status: "EXPIRED" } });
-      }
+      const currentStatus = await checkAndExpireVisit({
+        id: v.id,
+        visitorId: v.visitorId,
+        status: v.status,
+        expiresAt: v.expiresAt,
+        otpExpiresAt: v.otpExpiresAt,
+      });
 
       formatted.push({
         id: v.id,
+        visitorId: v.visitorId,
+        visitNumber: v.visitNumber,
+        visitorTotalVisits: v.visitor?.visitCount || v.visitNumber,
         visitorName: v.visitorName,
+        visitorEmail: v.visitorEmail,
         visitorPhone: v.visitorPhone,
+        idType: v.idType,
+        hasIdPhoto: Boolean(v.idPhotoPath),
+        hasIdNumber: Boolean(v.idNumber),
         purpose: v.purpose,
         status: currentStatus,
         hostName: v.host.name,

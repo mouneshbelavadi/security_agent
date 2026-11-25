@@ -19,6 +19,29 @@ model User {
   updatedAt          DateTime       @updatedAt
   employee           Employee?
   visitRequests      VisitRequest[] @relation("CreatedByUser")
+  actorAuditLogs     AuditLog[]     @relation("ActorAuditLogs")
+  targetAuditLogs    AuditLog[]     @relation("TargetAuditLogs")
+}
+
+model Visitor {
+  id              String         @id @default(cuid())
+  phone           String         @unique // Normalized 10-digit Indian mobile
+  email           String?
+  name            String
+  lastIdType      IdType?
+  lastIdNumber    String?
+  lastIdPhotoPath String?
+  lastSelfiePath  String?
+  visitCount      Int            @default(1)
+  firstVisitAt    DateTime       @default(now())
+  lastVisitAt     DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  visitRequests   VisitRequest[]
+  auditLogs       AuditLog[]
+
+  @@index([email])
+  @@index([name])
 }
 
 model Employee {
@@ -45,6 +68,9 @@ enum IdType {
 
 model VisitRequest {
   id              String     @id @default(cuid())
+  visitorId       String?
+  visitor         Visitor?   @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  visitNumber     Int        @default(1)
   visitorName     String
   visitorEmail    String
   visitorPhone    String
@@ -68,6 +94,13 @@ model VisitRequest {
   exitedAt        DateTime?
   emailFailed     Boolean    @default(false)
   auditLogs       AuditLog[]
+
+  @@index([visitorId])
+  @@index([visitorPhone])
+  @@index([visitorEmail])
+  @@index([hostId])
+  @@index([createdByUserId])
+  @@index([createdAt])
 }
 
 model EmailOutbox {
@@ -90,11 +123,24 @@ model UploadedFile {
 }
 
 model AuditLog {
-  id             String       @id @default(cuid())
-  visitRequestId String
-  visitRequest   VisitRequest @relation(fields: [visitRequestId], references: [id], onDelete: Cascade)
+  id             String        @id @default(cuid())
+  visitRequestId String?
+  visitRequest   VisitRequest? @relation(fields: [visitRequestId], references: [id], onDelete: Cascade)
+  visitorId      String?
+  visitor        Visitor?      @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  actorUserId    String?
+  actorUser      User?         @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorName      String?
+  targetUserId   String?
+  targetUser     User?         @relation("TargetAuditLogs", fields: [targetUserId], references: [id], onDelete: SetNull)
   action         String
-  actorType      String       // "GUARD", "EMPLOYEE", "ADMIN", "SYSTEM"
+  actorType      String        // "GUARD", "EMPLOYEE", "HOST", "ADMIN", "SYSTEM"
   details        String?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime      @default(now())
+
+  @@index([visitRequestId])
+  @@index([visitorId])
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([createdAt])
 }

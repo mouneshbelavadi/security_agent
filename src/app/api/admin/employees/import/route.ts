@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const importEmployeeItemSchema = z.object({
@@ -73,6 +74,14 @@ export async function POST(request: Request) {
     const created = await db.$transaction(
       validToInsert.map((data) => db.employee.create({ data }))
     );
+
+    await logAudit({
+      actorUserId: session.userId,
+      actorName: session.name,
+      action: "EMPLOYEES_BULK_IMPORTED",
+      actorType: "ADMIN",
+      details: `Admin ${session.name} imported ${created.length} employee(s) (${skippedEmails.length} skipped).`,
+    });
 
     return NextResponse.json({
       success: true,

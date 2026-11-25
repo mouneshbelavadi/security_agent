@@ -23,6 +23,7 @@ import { StatusBanner } from "@/components/ui/StatusBanner";
 import { Spinner } from "@/components/ui/Spinner";
 import { Toast } from "@/components/ui/Toast";
 import { useI18n } from "@/components/I18nProvider";
+import { usePolling } from "@/lib/usePolling";
 
 interface RequestDetails {
   id: string;
@@ -122,16 +123,8 @@ export default function GuardRequestStatusPage() {
     }
   };
 
-  // 2. Poll every 3 seconds while WAITING or APPROVED
-  useEffect(() => {
-    fetchStatus();
-    const pollInterval = setInterval(() => {
-      fetchStatus();
-    }, 3000);
-
-    return () => clearInterval(pollInterval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestId]);
+  // 2. Sequential non-overlapping polling while tab is visible
+  usePolling(fetchStatus, 3500);
 
   // 3. Live 1-second countdown decrement
   useEffect(() => {

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isExpired } from "@/lib/crypto";
-import { logAudit } from "@/lib/audit";
+import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
 
 export async function GET() {
   try {
@@ -11,7 +10,6 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch requests currently in active waiting states
     const requests = await db.visitRequest.findMany({
       where: {
         status: { in: ["WAITING_HOST", "APPROVED"] },
@@ -26,41 +24,28 @@ export async function GET() {
 
     const activeList = [];
 
-    // Background expiration check for each request
     for (const req of requests) {
-      if (req.status === "WAITING_HOST" && isExpired(req.expiresAt)) {
-        await db.visitRequest.update({
-          where: { id: req.id },
-          data: { status: "EXPIRED" },
-        });
-        await logAudit({
-          visitRequestId: req.id,
-          action: "STATUS_EXPIRED_HOST_TIMEOUT",
-          actorType: "SYSTEM",
-          details: "Approval window timed out.",
-        });
-      } else if (req.status === "APPROVED" && isExpired(req.otpExpiresAt)) {
-        await db.visitRequest.update({
-          where: { id: req.id },
-          data: { status: "EXPIRED" },
-        });
-        await logAudit({
-          visitRequestId: req.id,
-          action: "STATUS_EXPIRED_OTP_TIMEOUT",
-          actorType: "SYSTEM",
-          details: "OTP validity window expired.",
-        });
-      } else {
+      const updatedStatus = await checkAndExpireVisit({
+        id: req.id,
+        visitorId: req.visitorId,
+        status: req.status,
+        expiresAt: req.expiresAt,
+        otpExpiresAt: req.otpExpiresAt,
+      });
+
+      if (updatedStatus !== "EXPIRED") {
         activeList.push({
           id: req.id,
+          visitorId: req.visitorId,
+          visitNumber: req.visitNumber,
           visitorName: req.visitorName,
           visitorPhone: req.visitorPhone,
           purpose: req.purpose,
-          status: req.status,
+          status: updatedStatus,
           hostName: req.host.name,
           hostDepartment: req.host.department,
           createdAt: req.createdAt,
-          expiresAt: req.status === "WAITING_HOST" ? req.expiresAt : req.otpExpiresAt,
+          expiresAt: updatedStatus === "WAITING_HOST" ? req.expiresAt : req.otpExpiresAt,
         });
       }
     }

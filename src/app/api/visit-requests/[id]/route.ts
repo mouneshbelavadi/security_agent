@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isExpired } from "@/lib/crypto";
-import { logAudit } from "@/lib/audit";
+import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
 
 export async function GET(
   request: Request,
@@ -39,36 +38,14 @@ export async function GET(
       return NextResponse.json({ error: "Visit request not found" }, { status: 404 });
     }
 
-    // Check expiration if still in WAITING_HOST or APPROVED status
-    let currentStatus = visit.status;
+    const currentStatus = await checkAndExpireVisit({
+      id: visit.id,
+      visitorId: visit.visitorId,
+      status: visit.status,
+      expiresAt: visit.expiresAt,
+      otpExpiresAt: visit.otpExpiresAt,
+    });
 
-    if (currentStatus === "WAITING_HOST" && isExpired(visit.expiresAt)) {
-      currentStatus = "EXPIRED";
-      await db.visitRequest.update({
-        where: { id: visit.id },
-        data: { status: "EXPIRED" },
-      });
-      await logAudit({
-        visitRequestId: visit.id,
-        action: "STATUS_EXPIRED_HOST_TIMEOUT",
-        actorType: "SYSTEM",
-        details: "Host approval window elapsed without decision.",
-      });
-    } else if (currentStatus === "APPROVED" && isExpired(visit.otpExpiresAt)) {
-      currentStatus = "EXPIRED";
-      await db.visitRequest.update({
-        where: { id: visit.id },
-        data: { status: "EXPIRED" },
-      });
-      await logAudit({
-        visitRequestId: visit.id,
-        action: "STATUS_EXPIRED_OTP_TIMEOUT",
-        actorType: "SYSTEM",
-        details: "Visitor OTP validity window elapsed before verification.",
-      });
-    }
-
-    // Determine relevant expiration timestamp for live countdown
     let expiresAt: Date | null = null;
     if (currentStatus === "WAITING_HOST") {
       expiresAt = visit.expiresAt;
@@ -79,6 +56,8 @@ export async function GET(
     // IMPORTANT: Security rule: Never expose the otpHash or raw OTP to the guard!
     return NextResponse.json({
       id: visit.id,
+      visitorId: visit.visitorId,
+      visitNumber: visit.visitNumber,
       visitorName: visit.visitorName,
       visitorEmail: visit.visitorEmail,
       visitorPhone: visit.visitorPhone,

@@ -35,6 +35,27 @@ interface Employee {
   isActive: boolean;
 }
 
+interface ReturningVisitorMatch {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  visitCount: number;
+  lastVisitAt: string;
+  lastIdType: "AADHAAR" | "DRIVING_LICENCE" | "VOTER_ID" | "PASSPORT" | "PAN" | "OTHER";
+  lastIdNumber?: string | null;
+  lastIdPhotoPath?: string | null;
+  lastSelfiePath?: string | null;
+  lastPurpose?: string | null;
+  lastHost?: {
+    id: string;
+    name: string;
+    email: string;
+    department: string;
+    isActive: boolean;
+  } | null;
+}
+
 function maskEmail(email: string): string {
   const parts = email.split("@");
   if (parts.length !== 2) return email;
@@ -100,6 +121,12 @@ export default function NewVisitorPage() {
   // Wizard state: 1, 2, or 3
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
+  // Returning Visitor Lookup
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupResults, setLookupResults] = useState<ReturningVisitorMatch[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [matchedVisitor, setMatchedVisitor] = useState<ReturningVisitorMatch | null>(null);
+
   // Step 1: Visitor Details
   const [visitorName, setVisitorName] = useState("");
   const [visitorEmail, setVisitorEmail] = useState("");
@@ -120,8 +147,10 @@ export default function NewVisitorPage() {
   const [idNumber, setIdNumber] = useState("");
   const [idPhotoFile, setIdPhotoFile] = useState<File | null>(null);
   const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null);
+  const [savedIdPhotoPath, setSavedIdPhotoPath] = useState<string | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+  const [savedSelfiePath, setSavedSelfiePath] = useState<string | null>(null);
 
   // UI status
   const [error, setError] = useState<string | null>(null);
@@ -155,6 +184,76 @@ export default function NewVisitorPage() {
     loadEmployees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Debounced returning visitor lookup from phone, email, or search bar
+  useEffect(() => {
+    const query =
+      lookupQuery.trim() ||
+      (visitorPhone.replace(/\D/g, "").length >= 5 ? visitorPhone.replace(/\D/g, "") : "") ||
+      (visitorEmail.trim().length >= 5 && visitorEmail.includes("@") ? visitorEmail.trim() : "");
+
+    if (!query || query.length < 2) {
+      setLookupResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setLookupLoading(true);
+      try {
+        const res = await fetch(`/api/visitors/lookup?q=${encodeURIComponent(query)}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setLookupResults(data.visitors || []);
+        }
+      } catch {
+        // Non-blocking convenience lookup
+      } finally {
+        if (!cancelled) setLookupLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [lookupQuery, visitorPhone, visitorEmail]);
+
+  const handleApplyReturningVisitor = (v: ReturningVisitorMatch) => {
+    setMatchedVisitor(v);
+    setVisitorName(v.name);
+    if (v.email) setVisitorEmail(v.email);
+    setVisitorPhone(v.phone);
+    if (v.lastPurpose && !purpose) setPurpose(v.lastPurpose);
+    setSelectedIdType(v.lastIdType || "AADHAAR");
+
+    if (v.lastIdPhotoPath) {
+      setIdMethod("PHOTO");
+      setIdPhotoFile(null);
+      setSavedIdPhotoPath(v.lastIdPhotoPath);
+      setIdPhotoPreview(v.lastIdPhotoPath);
+    } else if (v.lastIdNumber) {
+      setIdMethod("NUMBER");
+      setIdNumber(v.lastIdNumber);
+      setSavedIdPhotoPath(null);
+      setIdPhotoPreview(null);
+    }
+
+    if (v.lastSelfiePath) {
+      setSelfieFile(null);
+      setSavedSelfiePath(v.lastSelfiePath);
+      setSelfiePreview(v.lastSelfiePath);
+    }
+
+    if (v.lastHost?.isActive) {
+      const activeEmp = employees.find((e) => e.id === v.lastHost?.id);
+      if (activeEmp) {
+        setSelectedHost(activeEmp);
+      }
+    }
+
+    setError(null);
+  };
 
   // Filtered employees in Step 2
   const filteredEmployees = employees.filter((emp) => {
@@ -211,6 +310,7 @@ export default function NewVisitorPage() {
         return;
       }
       setIdPhotoFile(processed);
+      setSavedIdPhotoPath(null);
       setIdPhotoPreview(URL.createObjectURL(processed));
       setError(null);
     }
@@ -225,19 +325,22 @@ export default function NewVisitorPage() {
         return;
       }
       setSelfieFile(processed);
+      setSavedSelfiePath(null);
       setSelfiePreview(URL.createObjectURL(processed));
       setError(null);
     }
   };
 
   const isIdStepComplete =
-    idMethod === "PHOTO" ? Boolean(idPhotoFile) : idNumber.trim().length >= 4;
+    idMethod === "PHOTO"
+      ? Boolean(idPhotoFile || savedIdPhotoPath)
+      : idNumber.trim().length >= 4;
 
   // Final Submit
   const handleFinalSubmit = async () => {
     setError(null);
 
-    if (idMethod === "PHOTO" && !idPhotoFile) {
+    if (idMethod === "PHOTO" && !idPhotoFile && !savedIdPhotoPath) {
       setError(t("uploadPhotoError"));
       return;
     }
@@ -256,26 +359,30 @@ export default function NewVisitorPage() {
     setIsSubmitting(true);
 
     try {
-      // 1. Upload ID Photo (only if PHOTO option selected)
+      // 1. Upload ID Photo (only if PHOTO option selected & new file uploaded; reuse saved path if kept)
       let idPhotoPath: string | undefined = undefined;
-      if (idMethod === "PHOTO" && idPhotoFile) {
-        const idFormData = new FormData();
-        idFormData.append("file", idPhotoFile);
+      if (idMethod === "PHOTO") {
+        if (idPhotoFile) {
+          const idFormData = new FormData();
+          idFormData.append("file", idPhotoFile);
 
-        const idRes = await fetch("/api/upload", {
-          method: "POST",
-          body: idFormData,
-        });
+          const idRes = await fetch("/api/upload", {
+            method: "POST",
+            body: idFormData,
+          });
 
-        if (!idRes.ok) {
-          const idErr = await idRes.json();
-          throw new Error(idErr.error || "Failed to upload ID photo.");
+          if (!idRes.ok) {
+            const idErr = await idRes.json();
+            throw new Error(idErr.error || "Failed to upload ID photo.");
+          }
+          const idData = await idRes.json();
+          idPhotoPath = idData.path;
+        } else if (savedIdPhotoPath) {
+          idPhotoPath = savedIdPhotoPath;
         }
-        const idData = await idRes.json();
-        idPhotoPath = idData.path;
       }
 
-      // 2. Upload optional selfie photo
+      // 2. Upload optional selfie photo (or reuse saved selfie)
       let selfiePath: string | undefined = undefined;
       if (selfieFile) {
         const selfieFormData = new FormData();
@@ -290,6 +397,8 @@ export default function NewVisitorPage() {
           const selfieData = await selfieRes.json();
           selfiePath = selfieData.path;
         }
+      } else if (savedSelfiePath) {
+        selfiePath = savedSelfiePath;
       }
 
       // 3. Create Visit Request
@@ -363,7 +472,89 @@ export default function NewVisitorPage() {
               <CardDescription>{t("visitorDetailsDesc")}</CardDescription>
             </CardHeader>
 
-            <CardContent>
+            <CardContent className="space-y-5">
+              {/* Returning Visitor Lookup Bar */}
+              <div className="p-3.5 rounded border border-border bg-slate-50/70 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-ink-subtle flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-accent" />
+                    <span>Returning Visitor Lookup (Optional)</span>
+                  </span>
+                  {matchedVisitor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMatchedVisitor(null);
+                        setSavedIdPhotoPath(null);
+                        setSavedSelfiePath(null);
+                        setIdPhotoPreview(null);
+                        setSelfiePreview(null);
+                      }}
+                      className="text-xs font-semibold text-accent hover:underline cursor-pointer"
+                    >
+                      Clear Auto-Fill
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
+                  <input
+                    type="text"
+                    value={lookupQuery}
+                    onChange={(e) => setLookupQuery(e.target.value)}
+                    placeholder="Type mobile, email, name, or ID number to auto-fill past visitor..."
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded bg-surface text-ink placeholder:text-ink-subtle focus:border-accent"
+                  />
+                </div>
+
+                {matchedVisitor && (
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded bg-accent-light border border-accent/25 text-xs">
+                    <span className="font-semibold text-ink">
+                      Auto-filled returning visitor: <strong>{matchedVisitor.name}</strong> (Visit #{matchedVisitor.visitCount + 1})
+                    </span>
+                    <Badge variant="accent">Repeat Visitor</Badge>
+                  </div>
+                )}
+
+                {lookupLoading && (
+                  <p className="text-xs text-ink-subtle">Checking past visitor records...</p>
+                )}
+
+                {!matchedVisitor && lookupResults.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {lookupResults.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded border border-border bg-surface text-xs"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 font-bold text-ink">
+                            <span>{v.name}</span>
+                            <Badge variant="accent">{v.visitCount} {v.visitCount === 1 ? "visit" : "visits"}</Badge>
+                          </div>
+                          <div className="text-ink-muted font-mono">
+                            {v.phone} • {v.email}
+                          </div>
+                          <div className="text-ink-subtle">
+                            {v.lastHost ? `Last met: ${v.lastHost.name} (${v.lastHost.department})` : ""}
+                            {v.lastIdPhotoPath ? " • Saved ID photo on file" : v.lastIdNumber ? ` • Saved ID: ${v.lastIdNumber}` : ""}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="accent"
+                          onClick={() => handleApplyReturningVisitor(v)}
+                        >
+                          Auto-Fill Details
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <form onSubmit={handleStep1Next} className="space-y-5">
                 <Input
                   label={t("visitorName")}
@@ -654,6 +845,7 @@ export default function NewVisitorPage() {
                           type="button"
                           onClick={() => {
                             setIdPhotoFile(null);
+                            setSavedIdPhotoPath(null);
                             setIdPhotoPreview(null);
                           }}
                           className="px-3 py-2 text-xs font-semibold text-danger hover:underline cursor-pointer flex items-center gap-1"
@@ -665,13 +857,20 @@ export default function NewVisitorPage() {
                     </div>
 
                     {idPhotoPreview && (
-                      <div className="mt-3 border border-border rounded overflow-hidden max-w-[240px]">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={idPhotoPreview}
-                          alt="ID Card Preview"
-                          className="w-full h-36 object-cover"
-                        />
+                      <div className="mt-3 space-y-1.5 max-w-[260px]">
+                        {savedIdPhotoPath && !idPhotoFile && (
+                          <div className="text-[11px] font-semibold text-accent">
+                            Reusing saved ID photo from previous visit (or upload a new photo above)
+                          </div>
+                        )}
+                        <div className="border border-border rounded overflow-hidden bg-slate-50">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={idPhotoPreview}
+                            alt="ID Card Preview"
+                            className="w-full h-36 object-contain"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -722,6 +921,7 @@ export default function NewVisitorPage() {
                         type="button"
                         onClick={() => {
                           setSelfieFile(null);
+                          setSavedSelfiePath(null);
                           setSelfiePreview(null);
                         }}
                         className="px-3 py-2 text-xs font-semibold text-danger hover:underline cursor-pointer flex items-center gap-1"
@@ -782,7 +982,9 @@ export default function NewVisitorPage() {
                     <span className="font-bold text-ink font-mono">
                       {idMethod === "PHOTO"
                         ? idPhotoFile
-                          ? "ID Card Photo Attached"
+                          ? "New ID Photo Attached"
+                          : savedIdPhotoPath
+                          ? "Saved ID Photo Reused"
                           : "Photo Pending"
                         : idNumber.trim() || "Pending"}
                     </span>
@@ -818,7 +1020,7 @@ export default function NewVisitorPage() {
                   <Button
                     size="lg"
                     variant="primary"
-                    disabled={!isIdStepComplete || isSubmitting}
+                    disabled={!idPhotoFile || isSubmitting}
                     isLoading={isSubmitting}
                     onClick={handleFinalSubmit}
                     leftIcon={<Send className="w-5 h-5" />}

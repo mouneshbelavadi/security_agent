@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const updateGuardSchema = z.object({
@@ -45,6 +46,15 @@ export async function PATCH(
         mustChangePassword: true,
         createdAt: true,
       },
+    });
+
+    await logAudit({
+      actorUserId: session.userId,
+      actorName: session.name,
+      targetUserId: updated.id,
+      action: "GUARD_UPDATED",
+      actorType: "ADMIN",
+      details: `Admin ${session.name} updated guard "${updated.name}" (${updated.username}) - Active: ${updated.isActive ? "Yes" : "No"}.`,
     });
 
     return NextResponse.json({ success: true, guard: updated });

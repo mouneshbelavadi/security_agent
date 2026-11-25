@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/crypto";
+import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const createGuardSchema = z.object({
@@ -86,6 +87,15 @@ export async function POST(request: Request) {
         mustChangePassword: true,
         createdAt: true,
       },
+    });
+
+    await logAudit({
+      actorUserId: session.userId,
+      actorName: session.name,
+      targetUserId: guard.id,
+      action: "GUARD_CREATED",
+      actorType: "ADMIN",
+      details: `Admin ${session.name} created guard account "${guard.name}" (${guard.username}).`,
     });
 
     return NextResponse.json({ success: true, guard });

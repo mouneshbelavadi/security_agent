@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession, getAuthenticatedEmployee } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isExpired } from "@/lib/crypto";
 import { maskPhoneNumber } from "@/lib/email";
+import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
 
 // GET /api/host/requests/[id]
 export async function GET(
@@ -54,18 +54,18 @@ export async function GET(
       );
     }
 
-    let status = visit.status;
-    if (status === "WAITING_HOST" && visit.expiresAt && isExpired(visit.expiresAt)) {
-      status = "EXPIRED";
-      await db.visitRequest.update({
-        where: { id: visit.id },
-        data: { status: "EXPIRED" },
-      });
-    }
+    const status = await checkAndExpireVisit({
+      id: visit.id,
+      visitorId: visit.visitorId,
+      status: visit.status,
+      expiresAt: visit.expiresAt,
+      otpExpiresAt: visit.otpExpiresAt,
+    });
 
-    // Never return idPhotoPath or idType
+    // Never return idPhotoPath, idNumber, or idType
     return NextResponse.json({
       id: visit.id,
+      visitNumber: visit.visitNumber,
       visitorName: visit.visitorName,
       visitorPhoneMasked: maskPhoneNumber(visit.visitorPhone),
       purpose: visit.purpose,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/crypto";
 import { createSession } from "@/lib/auth";
+import { logAudit, roleToActorType } from "@/lib/audit";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -42,6 +43,14 @@ export async function POST(request: Request) {
 
     const isMatch = await verifyPassword(password, user.passwordHash);
     if (!isMatch) {
+      await logAudit({
+        actorUserId: user.id,
+        actorName: user.name,
+        targetUserId: user.id,
+        action: "USER_LOGIN_FAILED",
+        actorType: roleToActorType(user.role),
+        details: `Failed sign-in attempt for ${user.name} (${user.username}).`,
+      });
       return NextResponse.json(
         { error: "Invalid username or password." },
         { status: 401 }
@@ -55,6 +64,15 @@ export async function POST(request: Request) {
       role: user.role,
       employeeId: user.employee?.id,
       mustChangePassword: user.mustChangePassword,
+    });
+
+    await logAudit({
+      actorUserId: user.id,
+      actorName: user.name,
+      targetUserId: user.id,
+      action: "USER_LOGIN",
+      actorType: roleToActorType(user.role),
+      details: `${user.name} (${user.username}) signed in (${user.role}).`,
     });
 
     let redirectUrl = "/guard";

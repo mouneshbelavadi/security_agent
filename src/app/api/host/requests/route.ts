@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession, getAuthenticatedEmployee } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isExpired } from "@/lib/crypto";
 import { maskPhoneNumber } from "@/lib/email";
+import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
 
 // GET /api/host/requests
 // Returns pending and recent decisions strictly for the logged-in employee
@@ -26,7 +26,6 @@ export async function GET() {
       );
     }
 
-    // 1. Fetch pending requests
     const pendingRaw = await db.visitRequest.findMany({
       where: {
         hostId: employee.id,
@@ -35,17 +34,20 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    // Check expiration on any pending requests
     const pending = [];
     for (const req of pendingRaw) {
-      if (req.expiresAt && isExpired(req.expiresAt)) {
-        await db.visitRequest.update({
-          where: { id: req.id },
-          data: { status: "EXPIRED" },
-        });
-      } else {
+      const updatedStatus = await checkAndExpireVisit({
+        id: req.id,
+        visitorId: req.visitorId,
+        status: req.status,
+        expiresAt: req.expiresAt,
+        otpExpiresAt: req.otpExpiresAt,
+      });
+
+      if (updatedStatus === "WAITING_HOST") {
         pending.push({
           id: req.id,
+          visitNumber: req.visitNumber,
           visitorName: req.visitorName,
           visitorPhoneMasked: maskPhoneNumber(req.visitorPhone),
           purpose: req.purpose,
@@ -57,18 +59,18 @@ export async function GET() {
       }
     }
 
-    // 2. Fetch recent decisions (decided requests)
     const recentRaw = await db.visitRequest.findMany({
       where: {
         hostId: employee.id,
         status: { not: "WAITING_HOST" },
       },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: 30,
     });
 
     const recent = recentRaw.map((req) => ({
       id: req.id,
+      visitNumber: req.visitNumber,
       visitorName: req.visitorName,
       visitorPhoneMasked: maskPhoneNumber(req.visitorPhone),
       purpose: req.purpose,

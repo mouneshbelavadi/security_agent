@@ -7,7 +7,8 @@ import {
   normalizeIndianPhone,
 } from "@/lib/crypto";
 import { sendHostApprovalEmail, resolveRequestBaseUrl } from "@/lib/email";
-import { logAudit } from "@/lib/audit";
+import { logAudit, AuditActorType } from "@/lib/audit";
+import { resolveOrUpsertVisitor } from "@/lib/visit-lifecycle";
 import { env } from "@/lib/env";
 import { z } from "zod";
 
@@ -32,7 +33,7 @@ const createVisitSchema = z
     }
   );
 
-// POST: Guard creates a new visit intake request
+// POST: Guard creates a new visit intake request linked to canonical Visitor history
 export async function POST(request: Request) {
   try {
     const session = await getSession();
@@ -81,38 +82,69 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate request expiry
     const expiresAt = getExpiryDate(env.REQUEST_EXPIRY_MINUTES);
 
-    const visit = await db.visitRequest.create({
-      data: {
+    const { visit, visitorId, visitNumber } = await db.$transaction(async (tx) => {
+      const resolved = await resolveOrUpsertVisitor(tx, {
         visitorName,
-        visitorEmail: visitorEmail.toLowerCase(),
-        visitorPhone: normalizedPhone,
+        visitorEmail,
+        normalizedPhone,
         idType,
         idNumber: idNumber?.trim() || null,
-        purpose: purpose || null,
-        hostId: host.id,
         idPhotoPath: idPhotoPath || null,
         selfiePath: selfiePath || null,
-        status: "WAITING_HOST",
-        expiresAt,
-        createdByUserId: session.userId,
-      },
-      include: {
-        host: true,
-      },
+      });
+
+      const createdVisit = await tx.visitRequest.create({
+        data: {
+          visitorId: resolved.visitorId,
+          visitNumber: resolved.visitNumber,
+          visitorName,
+          visitorEmail: visitorEmail.toLowerCase(),
+          visitorPhone: normalizedPhone,
+          idType,
+          idNumber: idNumber?.trim() || null,
+          purpose: purpose || null,
+          hostId: host.id,
+          idPhotoPath: idPhotoPath || null,
+          selfiePath: selfiePath || null,
+          status: "WAITING_HOST",
+          expiresAt,
+          createdByUserId: session.userId,
+        },
+        include: {
+          host: true,
+        },
+      });
+
+      return {
+        visit: createdVisit,
+        visitorId: resolved.visitorId,
+        visitNumber: resolved.visitNumber,
+      };
+    }, {
+      maxWait: 10000,
+      timeout: 20000,
     });
 
-    // Log audit trail
+    const actorType: AuditActorType = session.role === "ADMIN" ? "ADMIN" : "GUARD";
+    const idMethodSummary =
+      idPhotoPath && idNumber
+        ? `Photo + Number (${idNumber.trim()})`
+        : idPhotoPath
+        ? "Photo"
+        : `ID Number (${idNumber?.trim()})`;
+
     await logAudit({
       visitRequestId: visit.id,
+      visitorId,
+      actorUserId: session.userId,
+      actorName: session.name,
       action: "CREATED_WAITING_HOST",
-      actorType: "GUARD",
-      details: `Gate entry requested by Guard ${session.name} (${session.username}) for visitor ${visitorName} (ID Type: ${idType}, Method: ${idPhotoPath ? "Photo" : "ID Number"}).`,
+      actorType,
+      details: `Gate entry (Visit #${visitNumber}) requested by ${session.name} (${session.username}) for visitor ${visitorName} (Host: ${host.name}, ID Type: ${idType}, Method: ${idMethodSummary}).`,
     });
 
-    // Dispatch notification email to host with link to host dashboard
     const baseUrl = resolveRequestBaseUrl(request);
     const emailSent = await sendHostApprovalEmail({
       hostEmail: host.email,
@@ -133,6 +165,7 @@ export async function POST(request: Request) {
       });
       await logAudit({
         visitRequestId: visit.id,
+        visitorId,
         action: "EMAIL_DELIVERY_FAILED",
         actorType: "SYSTEM",
         details: `Initial approval email dispatch to ${host.email} failed.`,
@@ -140,6 +173,7 @@ export async function POST(request: Request) {
     } else {
       await logAudit({
         visitRequestId: visit.id,
+        visitorId,
         action: "EMAIL_DELIVERY_SUCCESS",
         actorType: "SYSTEM",
         details: `Initial approval email delivered to ${host.email}.`,
@@ -149,6 +183,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       requestId: visit.id,
+      visitorId,
+      visitNumber,
       status: visit.status,
       hostName: host.name,
       hostDepartment: host.department,
