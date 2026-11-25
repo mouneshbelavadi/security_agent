@@ -1,13 +1,12 @@
-# Visitor Verification System
+# VS Techsol - Internal Visitor Verification System
 
-A production-grade, internal gate pass web application for company security guards, administrators, and employee hosts powered by PostgreSQL.
+An internal gate pass and visitor verification web application built for **VS Techsol** security guards, administrators, and employee hosts, powered by PostgreSQL and Gmail SMTP.
 
 ---
 
-## 1. Quick Start for Client Demo
+## 1. Quick Start
 
 ### Reset Demo Environment
-Run the demo reset script to wipe any prior visitor passes, clear the SMS outbox, and re-seed clean accounts:
 ```bash
 npm run demo:reset
 ```
@@ -23,24 +22,20 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ---
 
-## 2. 10-Line Demo Script
+## 2. Verification Flow
 
-1. Open Mailpit at `http://localhost:8025` and the simulated SMS inbox at `http://localhost:3000/demo/sms-inbox` in a second browser window (acts as the visitor's phone).
-2. Sign in as a security guard at `http://localhost:3000/login` with username `guard1` and password `GatePass2026!`.
-3. Click "New Visitor" and enter visitor details: Name "Sunil Gowda", Email "sunil.gowda@example.com", and Mobile "9876543210".
-4. Search for host employee "Priya Sharma" (Human Resources) and select her.
-5. Choose ID type "Aadhaar Card", capture an ID photo, and click "Send Request to Host".
-6. Open a new incognito window, navigate to `http://localhost:3000/login`, and sign in as the employee (`priya.sharma@example.com` / `GatePass2026!`).
-7. On the employee dashboard at `/host` (or via the email button in Mailpit), review the visitor details and press the green "Approve Visitor" button.
-8. Switch to the second window (`/demo/sms-inbox`) to see the incoming SMS passcode (e.g. `123456`) valid for 5 minutes.
-9. On the guard screen (`/guard/request/[id]`), enter the 6-digit code to immediately see the large green banner: "Accepted. Please send the visitor in."
-10. Sign in as admin (`admin` / `GatePass2026!`) and open `/admin/log` to view the real-time summary strip, full audit timeline, and captured ID card.
+1. **Guard Check-In (`/guard/new`)**: Guard enters visitor Name, Email (where OTP will be sent), Mobile (10-digit Indian), optional Purpose, selects Host Employee, picks an ID Type (`AADHAAR`, `DRIVING_LICENCE`, `VOTER_ID`, `PASSPORT`, `PAN`, `OTHER`), and provides **either** an **ID Photo** **or** an **ID Number**.
+2. **Host Notification (Gmail SMTP)**: Nodemailer sends `"A visitor has arrived to meet you"` via Gmail SMTP to the host's email with a button linking to `/host/requests/[id]` (also mirrored in `/demo/email-inbox` for seeded `@example.com` demo hosts).
+3. **Host Review (`/host` / `/host/requests/[id]`)**: Host signs in and reviews masked phone, purpose, and optional face photo (ID photo and ID number are strictly hidden from hosts). Clicks **Approve Visitor** or **Deny Entry**.
+4. **Visitor OTP via Email**: On approval, a 6-digit OTP is generated, stored only as an HMAC-SHA256 hash (valid 5 minutes), and emailed directly to the visitor's email via Gmail SMTP.
+5. **Gate Entry (`/guard/request/[id]`)**: Guard enters the 6-digit code shown by the visitor (max 3 wrong attempts before lockout) to see the green **"Accepted. Please send the visitor in."** banner, then marks **Visitor Left** upon departure.
+6. **Admin Audit (`/admin/log`, `/admin/employees`, `/admin/guards`)**: Admin views real-time counters, full audit timelines, ID photos/ID numbers, adds employees with login accounts, and manages guards.
 
 ---
 
 ## 3. Demo User Accounts & Credentials
 
-All demo accounts share the same default demo password (`mustChangePassword: false`):
+All demo accounts share the default demo password (`mustChangePassword: false`):
 
 **Default Demo Password:** `GatePass2026!`
 
@@ -56,30 +51,14 @@ All demo accounts share the same default demo password (`mustChangePassword: fal
 
 ---
 
-## 4. Key Demo Pages & Endpoints
+## 4. Environment Variables for Vercel Deployment
 
-- **Guard Intake & Verification Terminal**:
-  - Home: `http://localhost:3000/guard`
-  - New Visitor Check-In: `http://localhost:3000/guard/new`
-  - Live Verification Status: `http://localhost:3000/guard/request/[id]`
-  - Today's Gate Visitors: `http://localhost:3000/guard/today`
-- **Employee Host Portal**:
-  - Host Dashboard (pending requests & decisions): `http://localhost:3000/host`
-  - Dedicated Request Review: `http://localhost:3000/host/requests/[id]`
-- **Visitor Simulated Handset**:
-  - Live Auto-Refreshing SMS Inbox (3s): `http://localhost:3000/demo/sms-inbox`
-- **Admin Management Portal**:
-  - Visitor Log & Audit Review: `http://localhost:3000/admin/log`
-  - Employee Directory & Login Creation: `http://localhost:3000/admin/employees`
-  - Security Guard Account Management: `http://localhost:3000/admin/guards`
-- **Local Mailpit Email UI**:
-  - Web Inbox: `http://localhost:8025` (SMTP port `1025`)
-
----
-
-## 5. Security & Privacy Invariants
-
-- **On-Premise & Air-Gapped**: Fully local. Zero external CDNs, fonts, or analytics; bundled Inter Variable font and Lucide icons.
-- **Privacy Enforcement**: ID card photos and ID types are strictly restricted to authenticated guard and admin sessions. Host employees never receive or see visitor ID cards.
-- **Server-Enforced Host Isolation**: Host endpoints verify on every query that `hostId === employee.id`. Cross-employee access returns `403 Forbidden`.
-- **OTP Security**: 6-digit OTP is hashed using SHA-256 in the database. Guard terminal locks permanently after 3 incorrect attempts.
+Set these in **Vercel Project Settings &rarr; Environment Variables**:
+- `DATABASE_URL` — PostgreSQL connection string (e.g. Neon Postgres)
+- `SESSION_SECRET` — Random 32+ character secret
+- `COMPANY_NAME` — `VS Techsol`
+- `SMTP_HOST` — `smtp.gmail.com`
+- `SMTP_PORT` — `465`
+- `SMTP_USER` — Gmail address for SMTP
+- `SMTP_PASS` — 16-character Gmail App Password
+- `MAIL_FROM` — `"VS Techsol Gate Security <your-gmail@gmail.com>"`

@@ -5,10 +5,10 @@ import { env } from "@/lib/env";
 import { I18nProvider } from "@/components/I18nProvider";
 
 export const metadata: Metadata = {
-  title: `${env.COMPANY_NAME} - Visitor Verification`,
-  description: "Internal security gate visitor verification system",
+  title: `${env.COMPANY_NAME} - Internal Visitor Verification`,
+  description: `Internal gate security visitor verification tool for ${env.COMPANY_NAME}`,
   icons: {
-    icon: "/icon.svg",
+    icon: "/icon.png",
   },
 };
 

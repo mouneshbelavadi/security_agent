@@ -125,7 +125,7 @@ export default function GuardTodayPage() {
   };
 
   return (
-    <GuardLayout companyName="Apex Technologies" userName="Gate Security Guard">
+    <GuardLayout companyName="VS Techsol" userName="Gate Security Guard">
       <div className="space-y-5">
         {/* Top Header with Back Button */}
         <div className="flex items-center justify-between pb-2 border-b border-border">

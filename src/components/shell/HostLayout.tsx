@@ -20,7 +20,7 @@ export function HostLayout({
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <TopBar
-        companyName="Apex Technologies"
+        companyName="VS Techsol"
         userName={userName}
         userRole={department ? `${department} Host` : "Host"}
         showLanguageSwitch={false}

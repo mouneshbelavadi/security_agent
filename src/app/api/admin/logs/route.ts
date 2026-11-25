@@ -115,6 +115,7 @@ export async function GET(request: Request) {
       visitorEmail: log.visitorEmail,
       visitorPhone: log.visitorPhone,
       idType: log.idType,
+      idNumber: log.idNumber,
       purpose: log.purpose,
       status: log.status,
       hostName: log.host.name,

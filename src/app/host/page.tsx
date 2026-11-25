@@ -127,7 +127,10 @@ export default function HostDashboardPage() {
       if (!res.ok) {
         setToast({ type: "danger", message: data.error || "Failed to approve request." });
       } else {
-        setToast({ type: "success", message: "Visitor approved. Gate pass SMS code sent to visitor." });
+        setToast({
+          type: data.otpEmailSent === false ? "danger" : "success",
+          message: data.message || "Visitor approved. 6-digit verification code sent to the visitor's email.",
+        });
         await fetchData(false);
       }
     } catch {

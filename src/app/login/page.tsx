@@ -48,10 +48,16 @@ function LoginForm() {
   return (
     <div className="w-full max-w-md">
       <div className="bg-surface border border-border rounded p-7 sm:p-9 shadow-none">
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col items-center text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="VS Techsol Logo"
+            className="w-20 h-20 object-contain mb-3 select-none"
+          />
           <h1 className="text-2xl font-bold tracking-tight text-ink">Sign In</h1>
           <p className="text-sm text-ink-muted mt-1">
-            Enter your credentials to access your verification dashboard.
+            VS Techsol Internal Gate Verification Portal
           </p>
         </div>
 
@@ -112,14 +118,22 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col justify-between bg-background">
       {/* Top minimal header */}
-      <header className="border-b border-border bg-surface py-3.5 px-6">
-        <div className="max-w-md mx-auto flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded bg-ink text-white flex items-center justify-center font-bold text-xs select-none">
-            VV
+      <header className="border-b border-border bg-surface py-3 px-6">
+        <div className="max-w-md mx-auto flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="VS Techsol Logo"
+            className="w-9 h-9 object-contain select-none"
+          />
+          <div>
+            <div className="text-sm font-bold text-ink tracking-tight leading-none">
+              VS Techsol
+            </div>
+            <div className="text-[11px] text-ink-subtle mt-0.5 leading-none">
+              Internal Visitor Verification
+            </div>
           </div>
-          <span className="text-sm font-bold text-ink tracking-tight">
-            Visitor Verification
-          </span>
         </div>
       </header>
 

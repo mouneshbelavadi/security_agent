@@ -49,6 +49,10 @@ export interface Translations {
   // Step 3: Photos & Review
   idPhotoTitle: string;
   idPhotoDesc: string;
+  idMethodPhoto: string;
+  idMethodNumber: string;
+  idNumberLabel: string;
+  idNumberPlaceholder: string;
   takePhotoId: string;
   takeVisitorPhoto: string;
   idPhotoAttached: string;
@@ -141,8 +145,12 @@ export const translations: Record<Language, Translations> = {
     searchEmployeePlaceholder: "Search employee name or department...",
     noEmployeesFound: "No matching employees found.",
 
-    idPhotoTitle: "ID Photo & Confirmation",
-    idPhotoDesc: "Capture visitor ID card to verify identity.",
+    idPhotoTitle: "ID Verification & Confirmation",
+    idPhotoDesc: "Select ID type and provide either a photo or the ID number.",
+    idMethodPhoto: "Upload / Take ID Photo",
+    idMethodNumber: "Enter ID Number",
+    idNumberLabel: "Government ID / Aadhaar Number",
+    idNumberPlaceholder: "Enter ID number (e.g. Aadhaar / PAN / DL)",
     takePhotoId: "Take photo of ID card",
     takeVisitorPhoto: "Take visitor photo (Optional)",
     idPhotoAttached: "ID photo attached",
@@ -155,7 +163,7 @@ export const translations: Record<Language, Translations> = {
     waitingHost: "Waiting for Host Approval",
     waitingApprovalFrom: "Waiting for approval from",
     askOtp: "Ask Visitor for 6-Digit OTP",
-    approvedAskOtp: "Host approved this visitor. Ask the visitor for the 6-digit code.",
+    approvedAskOtp: "Host approved this visitor. Ask the visitor for the 6-digit code sent to their email.",
     entryDenied: "ENTRY DENIED",
     deniedByHost: "Entry denied by host. Do not allow entry.",
     requestExpired: "Request expired. Please start a new request.",
@@ -232,7 +240,11 @@ export const translations: Record<Language, Translations> = {
     noEmployeesFound: "ಯಾವುದೇ ಉದ್ಯೋಗಿ ಕಂಡುಬಂದಿಲ್ಲ.",
 
     idPhotoTitle: "ಗುರುತಿನ ಚೀಟಿ ಮತ್ತು ಖಚಿತಪಡಿಸುವಿಕೆ",
-    idPhotoDesc: "ಗುರುತನ್ನು ದೃಢೀಕರಿಸಲು ಗುರುತಿನ ಚೀಟಿಯ ಫೋಟೋ ತೆಗೆಯಿರಿ.",
+    idPhotoDesc: "ಗುರುತಿನ ಚೀಟಿಯ ಪ್ರಕಾರವನ್ನು ಆಯ್ಕೆಮಾಡಿ ಮತ್ತು ಫೋಟೋ ಅಥವಾ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.",
+    idMethodPhoto: "ಗುರುತಿನ ಚೀಟಿಯ ಫೋಟೋ",
+    idMethodNumber: "ಗುರುತಿನ ಚೀಟಿ ಸಂಖ್ಯೆ ನಮೂದಿಸಿ",
+    idNumberLabel: "ಸರ್ಕಾರಿ ಗುರುತಿನ ಚೀಟಿ / ಆಧಾರ್ ಸಂಖ್ಯೆ",
+    idNumberPlaceholder: "ಗುರುತಿನ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ",
     takePhotoId: "ಗುರುತಿನ ಚೀಟಿಯ ಫೋಟೋ ತೆಗೆಯಿರಿ",
     takeVisitorPhoto: "ಸಂದರ್ಶಕರ ಫೋಟೋ ತೆಗೆಯಿರಿ (ಐಚ್ಛಿಕ)",
     idPhotoAttached: "ಗುರುತಿನ ಚೀಟಿ ಲಗತ್ತಿಸಲಾಗಿದೆ",
@@ -245,7 +257,7 @@ export const translations: Record<Language, Translations> = {
     waitingHost: "ಆತಿಥೇಯರ ಅನುಮೋದನೆಗಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ",
     waitingApprovalFrom: "ಇವರ ಅನುಮೋದನೆಗಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ",
     askOtp: "ಸಂದರ್ಶಕರಿಂದ 6-ಅಂಕಿಯ OTP ಕೇಳಿ",
-    approvedAskOtp: "ಆತಿಥೇಯರು ಅನುಮೋದಿಸಿದ್ದಾರೆ. ಸಂದರ್ಶಕರಿಂದ 6-ಅಂಕಿಯ ಕೋಡ್ ಕೇಳಿ.",
+    approvedAskOtp: "ಆತಿಥೇಯರು ಅನುಮೋದಿಸಿದ್ದಾರೆ. ಸಂದರ್ಶಕರ ಇಮೇಲ್‌ಗೆ ಕಳುಹಿಸಿದ 6-ಅಂಕಿಯ ಕೋಡ್ ಕೇಳಿ.",
     entryDenied: "ಪ್ರವೇಶ ನಿರಾಕರಿಸಲಾಗಿದೆ",
     deniedByHost: "ಪ್ರವೇಶ ನಿರಾಕರಿಸಲಾಗಿದೆ. ಗೇಟ್ ದಾಟಲು ಬಿಡಬೇಡಿ.",
     requestExpired: "ವಿನಂತಿ ಅವಧಿ ಮುಗಿದಿದೆ. ಹೊಸ ವಿನಂತಿ ಪ್ರಾರಂಭಿಸಿ.",

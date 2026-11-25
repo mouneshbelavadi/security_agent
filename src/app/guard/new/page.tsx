@@ -17,6 +17,7 @@ import {
   Building,
   Mail,
   UserCheck,
+  CreditCard,
 } from "lucide-react";
 import { GuardLayout } from "@/components/shell/GuardLayout";
 import { Button } from "@/components/ui/Button";
@@ -112,9 +113,11 @@ export default function NewVisitorPage() {
   const [hostSearch, setHostSearch] = useState("");
   const [selectedHost, setSelectedHost] = useState<Employee | null>(null);
 
-  // Step 3: Photos & Confirmation
+  // Step 3: ID Verification (Photo OR Number) & Confirmation
   type IdTypeOption = "AADHAAR" | "DRIVING_LICENCE" | "VOTER_ID" | "PASSPORT" | "PAN" | "OTHER";
   const [selectedIdType, setSelectedIdType] = useState<IdTypeOption>("AADHAAR");
+  const [idMethod, setIdMethod] = useState<"PHOTO" | "NUMBER">("PHOTO");
+  const [idNumber, setIdNumber] = useState("");
   const [idPhotoFile, setIdPhotoFile] = useState<File | null>(null);
   const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
@@ -227,12 +230,20 @@ export default function NewVisitorPage() {
     }
   };
 
+  const isIdStepComplete =
+    idMethod === "PHOTO" ? Boolean(idPhotoFile) : idNumber.trim().length >= 4;
+
   // Final Submit
   const handleFinalSubmit = async () => {
     setError(null);
 
-    if (!idPhotoFile) {
+    if (idMethod === "PHOTO" && !idPhotoFile) {
       setError(t("uploadPhotoError"));
+      return;
+    }
+
+    if (idMethod === "NUMBER" && idNumber.trim().length < 4) {
+      setError("Please enter a valid ID number (minimum 4 characters).");
       return;
     }
 
@@ -245,20 +256,24 @@ export default function NewVisitorPage() {
     setIsSubmitting(true);
 
     try {
-      // 1. Upload ID Photo
-      const idFormData = new FormData();
-      idFormData.append("file", idPhotoFile);
+      // 1. Upload ID Photo (only if PHOTO option selected)
+      let idPhotoPath: string | undefined = undefined;
+      if (idMethod === "PHOTO" && idPhotoFile) {
+        const idFormData = new FormData();
+        idFormData.append("file", idPhotoFile);
 
-      const idRes = await fetch("/api/upload", {
-        method: "POST",
-        body: idFormData,
-      });
+        const idRes = await fetch("/api/upload", {
+          method: "POST",
+          body: idFormData,
+        });
 
-      if (!idRes.ok) {
-        const idErr = await idRes.json();
-        throw new Error(idErr.error || "Failed to upload ID photo.");
+        if (!idRes.ok) {
+          const idErr = await idRes.json();
+          throw new Error(idErr.error || "Failed to upload ID photo.");
+        }
+        const idData = await idRes.json();
+        idPhotoPath = idData.path;
       }
-      const idData = await idRes.json();
 
       // 2. Upload optional selfie photo
       let selfiePath: string | undefined = undefined;
@@ -287,9 +302,10 @@ export default function NewVisitorPage() {
           visitorEmail: visitorEmail.trim().toLowerCase(),
           visitorPhone: cleanPhone,
           idType: selectedIdType,
+          idPhotoPath,
+          idNumber: idMethod === "NUMBER" ? idNumber.trim() : undefined,
           purpose: purpose.trim() || undefined,
           hostId: selectedHost.id,
-          idPhotoPath: idData.path,
           selfiePath,
         }),
       });
@@ -308,7 +324,7 @@ export default function NewVisitorPage() {
   };
 
   return (
-    <GuardLayout companyName="Apex Technologies" userName="Gate Security Guard">
+    <GuardLayout companyName="VS Techsol" userName="Gate Security Guard">
       <div className="space-y-5">
         {/* Progress Bar (Clear "Step X of 3" indicator) */}
         <div className="bg-surface border border-border rounded p-3.5 space-y-2 select-none">
@@ -568,56 +584,114 @@ export default function NewVisitorPage() {
                   </div>
                 </div>
 
-                {/* ID Photo Action */}
-                <div>
-                  <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                    <label
-                      htmlFor="idPhotoCameraInput"
-                      className={`btn-guard flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded cursor-pointer transition-colors w-full ${
-                        idPhotoPreview
-                          ? "border-success bg-success-bg text-success-text"
-                          : "border-border hover:border-accent bg-surface text-ink"
+                {/* ID Verification Method Selector: Photo OR ID Number */}
+                <div className="space-y-3 pt-1">
+                  <label className="block text-sm font-bold text-ink">
+                    Provide ID Photo or ID Number *
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdMethod("PHOTO");
+                        setError(null);
+                      }}
+                      className={`btn-guard p-3 rounded border-2 flex items-center justify-center gap-2 font-bold text-sm transition-colors cursor-pointer ${
+                        idMethod === "PHOTO"
+                          ? "border-accent bg-accent-light text-accent"
+                          : "border-border bg-surface text-ink hover:border-slate-400"
                       }`}
                     >
-                      <Camera className="w-5 h-5 text-accent" />
-                      <span className="font-semibold">{t("takePhotoId")} *</span>
-                    </label>
+                      <Camera className="w-5 h-5 shrink-0" />
+                      <span>{t("idMethodPhoto")}</span>
+                    </button>
 
-                    <input
-                      id="idPhotoCameraInput"
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleIdPhotoSelect}
-                      className="sr-only"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdMethod("NUMBER");
+                        setError(null);
+                      }}
+                      className={`btn-guard p-3 rounded border-2 flex items-center justify-center gap-2 font-bold text-sm transition-colors cursor-pointer ${
+                        idMethod === "NUMBER"
+                          ? "border-accent bg-accent-light text-accent"
+                          : "border-border bg-surface text-ink hover:border-slate-400"
+                      }`}
+                    >
+                      <CreditCard className="w-5 h-5 shrink-0" />
+                      <span>{t("idMethodNumber")}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Option 1: ID Photo Action */}
+                {idMethod === "PHOTO" ? (
+                  <div>
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                      <label
+                        htmlFor="idPhotoCameraInput"
+                        className={`btn-guard flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded cursor-pointer transition-colors w-full ${
+                          idPhotoPreview
+                            ? "border-success bg-success-bg text-success-text"
+                            : "border-border hover:border-accent bg-surface text-ink"
+                        }`}
+                      >
+                        <Camera className="w-5 h-5 text-accent" />
+                        <span className="font-semibold">{t("takePhotoId")} *</span>
+                      </label>
+
+                      <input
+                        id="idPhotoCameraInput"
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleIdPhotoSelect}
+                        className="sr-only"
+                      />
+
+                      {idPhotoPreview && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIdPhotoFile(null);
+                            setIdPhotoPreview(null);
+                          }}
+                          className="px-3 py-2 text-xs font-semibold text-danger hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>{t("retake")}</span>
+                        </button>
+                      )}
+                    </div>
 
                     {idPhotoPreview && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIdPhotoFile(null);
-                          setIdPhotoPreview(null);
-                        }}
-                        className="px-3 py-2 text-xs font-semibold text-danger hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>{t("retake")}</span>
-                      </button>
+                      <div className="mt-3 border border-border rounded overflow-hidden max-w-[240px]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={idPhotoPreview}
+                          alt="ID Card Preview"
+                          className="w-full h-36 object-cover"
+                        />
+                      </div>
                     )}
                   </div>
-
-                  {idPhotoPreview && (
-                    <div className="mt-3 border border-border rounded overflow-hidden max-w-[240px]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={idPhotoPreview}
-                        alt="ID Card Preview"
-                        className="w-full h-36 object-cover"
-                      />
-                    </div>
-                  )}
-                </div>
+                ) : (
+                  /* Option 2: Enter ID Number */
+                  <div>
+                    <Input
+                      label={t("idNumberLabel")}
+                      required
+                      tabular
+                      value={idNumber}
+                      onChange={(e) => setIdNumber(e.target.value.toUpperCase())}
+                      placeholder={t("idNumberPlaceholder")}
+                      maxLength={30}
+                      helperText="Enter full ID number (e.g. 12-digit Aadhaar, PAN, Driving Licence). Minimum 4 characters."
+                      leftIcon={<CreditCard className="w-5 h-5" />}
+                      className="text-lg tracking-wider"
+                    />
+                  </div>
+                )}
 
                 {/* Optional Visitor Photo */}
                 <div className="pt-2 border-t border-border">
@@ -703,6 +777,17 @@ export default function NewVisitorPage() {
                     </span>
                   </div>
 
+                  <div className="flex justify-between py-1 border-b border-border/60">
+                    <span className="text-ink-muted">ID Verification</span>
+                    <span className="font-bold text-ink font-mono">
+                      {idMethod === "PHOTO"
+                        ? idPhotoFile
+                          ? "ID Card Photo Attached"
+                          : "Photo Pending"
+                        : idNumber.trim() || "Pending"}
+                    </span>
+                  </div>
+
                   {purpose && (
                     <div className="flex justify-between py-1 border-b border-border/60">
                       <span className="text-ink-muted">Purpose</span>
@@ -733,7 +818,7 @@ export default function NewVisitorPage() {
                   <Button
                     size="lg"
                     variant="primary"
-                    disabled={!idPhotoFile || isSubmitting}
+                    disabled={!isIdStepComplete || isSubmitting}
                     isLoading={isSubmitting}
                     onClick={handleFinalSubmit}
                     leftIcon={<Send className="w-5 h-5" />}

@@ -29,7 +29,8 @@ interface RequestDetails {
   visitorName: string;
   visitorPhone: string;
   purpose?: string | null;
-  idPhotoPath: string;
+  idPhotoPath?: string | null;
+  idNumber?: string | null;
   selfiePath?: string | null;
   status: string;
   hostName: string;
@@ -247,7 +248,7 @@ export default function GuardRequestStatusPage() {
 
   if (loading) {
     return (
-      <GuardLayout companyName="Apex Technologies" userName="Gate Security Guard">
+      <GuardLayout companyName="VS Techsol" userName="Gate Security Guard">
         <div className="text-center py-16 space-y-3">
           <Spinner size="lg" className="text-accent" />
           <p className="text-base text-ink-muted">Loading request status...</p>
@@ -258,7 +259,7 @@ export default function GuardRequestStatusPage() {
 
   if (error || !details) {
     return (
-      <GuardLayout companyName="Apex Technologies" userName="Gate Security Guard">
+      <GuardLayout companyName="VS Techsol" userName="Gate Security Guard">
         <Card className="text-center py-12 space-y-4">
           <div className="w-12 h-12 rounded bg-danger-bg text-danger mx-auto flex items-center justify-center">
             <XCircle className="w-6 h-6" />
@@ -288,7 +289,7 @@ export default function GuardRequestStatusPage() {
 
   return (
     <GuardLayout
-      companyName="Apex Technologies"
+      companyName="VS Techsol"
       userName="Gate Security Guard"
       bottomAction={
         isWaiting ? (
@@ -378,7 +379,7 @@ export default function GuardRequestStatusPage() {
           <StatusBanner
             status="approved"
             title={`${details.hostName} approved this visitor.`}
-            description="Ask the visitor for the 6-digit code shown on their screen."
+            description="Ask the visitor for the 6-digit code sent to their email."
           />
         )}
 

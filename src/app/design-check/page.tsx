@@ -44,7 +44,7 @@ export default function DesignCheckPage() {
   return (
     <div className="min-h-screen bg-background text-ink">
       <TopBar
-        companyName="Apex Technologies"
+        companyName="VS Techsol"
         userName="Design Reviewer"
         userRole="System Design Check"
       />

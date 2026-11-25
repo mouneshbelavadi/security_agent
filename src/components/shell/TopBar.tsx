@@ -34,17 +34,20 @@ export function TopBar({
   return (
     <header className="bg-surface border-b border-border sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-        {/* Left: Text Wordmark built from COMPANY_NAME */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded bg-ink text-white flex items-center justify-center font-bold text-xs select-none">
-            {companyName.slice(0, 2).toUpperCase()}
-          </div>
+        {/* Left: Company Logo & Wordmark */}
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt={`${companyName} Logo`}
+            className="w-10 h-10 object-contain shrink-0 select-none"
+          />
           <div>
             <div className="text-base font-bold text-ink tracking-tight leading-none">
               {companyName}
             </div>
-            <div className="text-xs text-ink-subtle mt-0.5 leading-none font-medium">
-              Visitor Verification
+            <div className="text-xs text-ink-subtle mt-1 leading-none font-medium">
+              Internal Visitor Verification
             </div>
           </div>
         </div>

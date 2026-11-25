@@ -62,7 +62,7 @@ export default function GuardHomePage() {
   }, []);
 
   return (
-    <GuardLayout companyName="Apex Technologies" userName="Gate Security Guard">
+    <GuardLayout companyName="VS Techsol" userName="Gate Security Guard">
       <div className="space-y-6">
         {/* Two Large Action Buttons (Strictly 56px height, high contrast, large text) */}
         <div className="space-y-3">

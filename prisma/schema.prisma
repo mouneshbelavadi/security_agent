@@ -49,10 +49,11 @@ model VisitRequest {
   visitorEmail    String
   visitorPhone    String
   idType          IdType     @default(AADHAAR)
+  idNumber        String?
   purpose         String?
   hostId          String
   host            Employee   @relation(fields: [hostId], references: [id])
-  idPhotoPath     String
+  idPhotoPath     String?
   selfiePath      String?
   status          String     @default("WAITING_HOST") // WAITING_HOST, APPROVED, DENIED, EXPIRED, ENTERED, LOCKED, EXITED
   expiresAt       DateTime?
@@ -67,13 +68,6 @@ model VisitRequest {
   exitedAt        DateTime?
   emailFailed     Boolean    @default(false)
   auditLogs       AuditLog[]
-}
-
-model SmsOutbox {
-  id        String   @id @default(cuid())
-  mobile    String
-  message   String
-  createdAt DateTime @default(now())
 }
 
 model EmailOutbox {

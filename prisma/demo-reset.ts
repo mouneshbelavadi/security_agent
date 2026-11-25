@@ -39,14 +39,13 @@ async function main() {
   console.log("RESETTING DEMO ENVIRONMENT FOR VISITOR VERIFICATION");
   console.log("=================================================================");
 
-  // 1. Clear all visitor records, sms outbox, email outbox, uploaded files, and audit logs
-  console.log("[1/4] Clearing visitor records, sms/email outbox, uploaded files, and audit logs...");
+  // 1. Clear all visitor records, email outbox, uploaded files, and audit logs
+  console.log("[1/4] Clearing visitor records, email outbox, uploaded files, and audit logs...");
   const deletedAuditLogs = await prisma.auditLog.deleteMany({});
   const deletedVisits = await prisma.visitRequest.deleteMany({});
-  const deletedSms = await prisma.smsOutbox.deleteMany({});
   const deletedEmails = await prisma.emailOutbox.deleteMany({});
   const deletedUploads = await prisma.uploadedFile.deleteMany({});
-  console.log(`✔ Cleared ${deletedVisits.count} visit requests, ${deletedSms.count} sms, ${deletedEmails.count} emails, ${deletedUploads.count} uploaded files, and ${deletedAuditLogs.count} audit logs.`);
+  console.log(`✔ Cleared ${deletedVisits.count} visit requests, ${deletedEmails.count} emails, ${deletedUploads.count} uploaded files, and ${deletedAuditLogs.count} audit logs.`);
 
   // 2. Clean temporary visitor uploads
   console.log("[2/4] Cleaning visitor uploads directory...");
@@ -166,8 +165,8 @@ async function main() {
   console.log("-----------------------------------------------------------------");
   console.log("SERVICES:");
   console.log("  Web Application:   http://localhost:3000");
-  console.log("  Demo SMS Inbox:    http://localhost:3000/demo/sms-inbox");
-  console.log("  Mailpit Web UI:    http://localhost:8025 (SMTP port: 1025)");
+  console.log("  Email Outbox Log:  http://localhost:3000/demo/email-inbox");
+  console.log("  Email Transport:   Gmail SMTP (configured via .env)");
   console.log("=================================================================\n");
 }
 

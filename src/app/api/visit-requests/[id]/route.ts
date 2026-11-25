@@ -83,6 +83,7 @@ export async function GET(
       visitorEmail: visit.visitorEmail,
       visitorPhone: visit.visitorPhone,
       idType: visit.idType,
+      idNumber: visit.idNumber,
       purpose: visit.purpose,
       idPhotoPath: visit.idPhotoPath,
       selfiePath: visit.selfiePath,

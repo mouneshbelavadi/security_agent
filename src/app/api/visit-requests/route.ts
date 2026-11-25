@@ -11,16 +11,26 @@ import { logAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { z } from "zod";
 
-const createVisitSchema = z.object({
-  visitorName: z.string().trim().min(2, "Visitor name is required"),
-  visitorEmail: z.string().trim().email("Valid email address is required"),
-  visitorPhone: z.string().trim(),
-  idType: z.enum(["AADHAAR", "DRIVING_LICENCE", "VOTER_ID", "PASSPORT", "PAN", "OTHER"]),
-  purpose: z.string().trim().optional(),
-  hostId: z.string().min(1, "Host employee is required"),
-  idPhotoPath: z.string().min(1, "Visitor ID photo is required"),
-  selfiePath: z.string().optional(),
-});
+const createVisitSchema = z
+  .object({
+    visitorName: z.string().trim().min(2, "Visitor name is required"),
+    visitorEmail: z.string().trim().email("Valid email address is required"),
+    visitorPhone: z.string().trim(),
+    idType: z.enum(["AADHAAR", "DRIVING_LICENCE", "VOTER_ID", "PASSPORT", "PAN", "OTHER"]),
+    purpose: z.string().trim().optional(),
+    hostId: z.string().min(1, "Host employee is required"),
+    idPhotoPath: z.string().trim().optional().nullable(),
+    idNumber: z.string().trim().max(30, "ID number is too long").optional().nullable(),
+    selfiePath: z.string().optional().nullable(),
+  })
+  .refine(
+    (data) =>
+      Boolean(data.idPhotoPath && data.idPhotoPath.length > 0) ||
+      Boolean(data.idNumber && data.idNumber.trim().length >= 4),
+    {
+      message: "Please either take an ID photo or enter a valid ID number (minimum 4 characters).",
+    }
+  );
 
 // POST: Guard creates a new visit intake request
 export async function POST(request: Request) {
@@ -39,7 +49,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const { visitorName, visitorEmail, visitorPhone, idType, purpose, hostId, idPhotoPath, selfiePath } = parsed.data;
+    const {
+      visitorName,
+      visitorEmail,
+      visitorPhone,
+      idType,
+      purpose,
+      hostId,
+      idPhotoPath,
+      idNumber,
+      selfiePath,
+    } = parsed.data;
 
     if (!isValidIndianPhone(visitorPhone)) {
       return NextResponse.json(
@@ -70,9 +90,10 @@ export async function POST(request: Request) {
         visitorEmail: visitorEmail.toLowerCase(),
         visitorPhone: normalizedPhone,
         idType,
+        idNumber: idNumber?.trim() || null,
         purpose: purpose || null,
         hostId: host.id,
-        idPhotoPath,
+        idPhotoPath: idPhotoPath || null,
         selfiePath: selfiePath || null,
         status: "WAITING_HOST",
         expiresAt,
@@ -88,7 +109,7 @@ export async function POST(request: Request) {
       visitRequestId: visit.id,
       action: "CREATED_WAITING_HOST",
       actorType: "GUARD",
-      details: `Gate entry requested by Guard ${session.name} (${session.username}) for visitor ${visitorName} (ID Type: ${idType}).`,
+      details: `Gate entry requested by Guard ${session.name} (${session.username}) for visitor ${visitorName} (ID Type: ${idType}, Method: ${idPhotoPath ? "Photo" : "ID Number"}).`,
     });
 
     // Dispatch notification email to host with link to host dashboard

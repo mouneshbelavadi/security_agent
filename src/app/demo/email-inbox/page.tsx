@@ -62,20 +62,23 @@ export default function DemoEmailInboxPage() {
 
         {/* Inbox Header */}
         <div className="flex items-center justify-between border-b border-border pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded bg-accent text-white flex items-center justify-center">
-              <Mail className="w-5 h-5" />
-            </div>
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="VS Techsol Logo"
+              className="w-10 h-10 object-contain shrink-0"
+            />
             <div>
-              <h1 className="text-lg font-bold text-ink leading-tight">Host Email Outbox</h1>
+              <h1 className="text-lg font-bold text-ink leading-tight">VS Techsol Email Outbox</h1>
               <p className="text-xs text-ink-muted">Latest 10 visitor arrival notifications</p>
             </div>
           </div>
           <Link
-            href="/demo/sms-inbox"
+            href="/login"
             className="text-xs font-semibold text-accent hover:underline"
           >
-            Open SMS Inbox &rarr;
+            Sign In Portal &rarr;
           </Link>
         </div>
 

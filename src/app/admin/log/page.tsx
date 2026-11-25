@@ -38,6 +38,7 @@ interface VisitLog {
   visitorEmail: string;
   visitorPhone: string;
   idType: string;
+  idNumber?: string | null;
   purpose?: string | null;
   status: string;
   hostName: string;
@@ -45,7 +46,7 @@ interface VisitLog {
   hostEmail: string;
   guardName: string;
   guardUsername: string;
-  idPhotoPath: string;
+  idPhotoPath?: string | null;
   selfiePath?: string | null;
   createdAt: string;
   approvedAt?: string | null;
@@ -172,7 +173,7 @@ export default function AdminVisitorLogPage() {
   };
 
   return (
-    <AdminLayout companyName="Apex Technologies" activeSection="LOGS">
+    <AdminLayout companyName="VS Techsol" activeSection="LOGS">
       <div className="space-y-6">
         {toastMessage && (
           <Toast
@@ -464,6 +465,15 @@ export default function AdminVisitorLogPage() {
                     {selectedLog.idType?.replace("_", " ") || "ID DOCUMENT"}
                   </Badge>
                 </div>
+
+                {selectedLog.idNumber && (
+                  <div className="flex items-center justify-between bg-surface border border-border rounded px-3.5 py-2.5 text-sm">
+                    <span className="text-ink-muted font-medium">Recorded ID Number</span>
+                    <span className="font-mono font-bold text-ink tracking-wide">
+                      {selectedLog.idNumber}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-center p-2">
                   {selectedLog.idPhotoPath && (

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession, getAuthenticatedEmployee } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { generateOtp, hashOtp, getExpiryDate, isExpired } from "@/lib/crypto";
-import { sendVisitorOtp } from "@/lib/sms";
+import { sendVisitorOtpEmail } from "@/lib/email";
 import { logAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
 
@@ -76,21 +76,33 @@ export async function POST(
       },
     });
 
-    // 3. Log audit trail
-    await logAudit({
-      visitRequestId: visit.id,
-      action: "STATUS_APPROVED_BY_EMPLOYEE",
-      actorType: "EMPLOYEE",
-      details: `Host employee ${employee.name} (${employee.email}) approved visitor entry.`,
+    // 3. Send 6-digit OTP directly to visitor's email via Gmail SMTP
+    const otpEmailSent = await sendVisitorOtpEmail({
+      visitorEmail: visit.visitorEmail,
+      visitorName: visit.visitorName,
+      hostName: visit.host.name,
+      hostDepartment: visit.host.department,
+      otp,
+      expiryMinutes: env.OTP_EXPIRY_MINUTES,
     });
 
-    // 4. Send SMS to visitor's mobile via small wrapper (prints to console and writes to SmsOutbox table)
-    await sendVisitorOtp(visit.visitorPhone, otp);
+    // 4. Log audit trail
+    await logAudit({
+      visitRequestId: visit.id,
+      action: otpEmailSent ? "STATUS_APPROVED_OTP_EMAILED" : "STATUS_APPROVED_OTP_EMAIL_FAILED",
+      actorType: "EMPLOYEE",
+      details: otpEmailSent
+        ? `Host employee ${employee.name} (${employee.email}) approved visitor entry. 6-digit OTP emailed to ${visit.visitorEmail}.`
+        : `Host employee ${employee.name} (${employee.email}) approved visitor entry, but OTP email dispatch to ${visit.visitorEmail} failed.`,
+    });
 
     return NextResponse.json({
       success: true,
       status: "APPROVED",
-      message: "Visitor request approved. SMS code dispatched to visitor.",
+      otpEmailSent,
+      message: otpEmailSent
+        ? `Visitor approved. 6-digit code sent via email to ${visit.visitorEmail}.`
+        : `Visitor approved, but failed to send OTP email to ${visit.visitorEmail}. Please verify SMTP settings.`,
     });
   } catch (error) {
     console.error("Host approve error:", error);

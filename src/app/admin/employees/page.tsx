@@ -127,7 +127,7 @@ export default function AdminEmployeesPage() {
   };
 
   return (
-    <AdminLayout companyName="Apex Technologies" activeSection="HOSTS">
+    <AdminLayout companyName="VS Techsol" activeSection="HOSTS">
       <div className="space-y-6">
         {toastMessage && (
           <Toast

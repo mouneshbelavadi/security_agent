@@ -167,7 +167,7 @@ export default function AdminGuardsPage() {
   };
 
   return (
-    <AdminLayout companyName="Apex Technologies" activeSection="GUARDS">
+    <AdminLayout companyName="VS Techsol" activeSection="GUARDS">
       <div className="space-y-6">
         {toastMessage && (
           <Toast
@@ -279,11 +279,10 @@ export default function AdminGuardsPage() {
                         <button
                           type="button"
                           onClick={() => handleToggleActive(guard)}
-                          className={`inline-flex items-center gap-1 text-xs font-semibold p-1 ${
-                            guard.isActive
+                          className={`inline-flex items-center gap-1 text-xs font-semibold p-1 ${guard.isActive
                               ? "text-danger hover:text-danger-hover"
                               : "text-success hover:text-success-hover"
-                          }`}
+                            }`}
                         >
                           {guard.isActive ? <span>Deactivate</span> : <span>Activate</span>}
                         </button>

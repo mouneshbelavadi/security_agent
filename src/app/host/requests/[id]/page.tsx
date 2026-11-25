@@ -108,7 +108,10 @@ export default function HostReviewRequestPage() {
       if (!res.ok) {
         setToast({ type: "danger", message: data.error || "Approval failed." });
       } else {
-        setToast({ type: "success", message: "Visitor approved. Gate pass SMS code sent to visitor." });
+        setToast({
+          type: data.otpEmailSent === false ? "danger" : "success",
+          message: data.message || "Visitor approved. 6-digit verification code sent to the visitor's email.",
+        });
         await fetchDetail();
       }
     } catch {
@@ -235,7 +238,7 @@ export default function HostReviewRequestPage() {
             }
             description={
               visit.status === "APPROVED"
-                ? "The visitor has received their 6-digit OTP code to present to the security guard."
+                ? "The visitor has received their 6-digit OTP code via email to present to the security guard."
                 : visit.status === "DENIED"
                 ? "The security guard has been instructed not to grant gate entry."
                 : undefined

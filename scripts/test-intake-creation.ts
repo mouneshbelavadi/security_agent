@@ -3,16 +3,22 @@ import { generateSecureToken, hashToken, getExpiryDate } from "../src/lib/crypto
 import { env } from "../src/lib/env";
 import { z } from "zod";
 
-const createVisitSchema = z.object({
-  visitorName: z.string().trim().min(2),
-  visitorEmail: z.string().trim().email(),
-  visitorPhone: z.string().trim().regex(/^[0-9]{10}$/),
-  idType: z.enum(["AADHAAR", "DRIVING_LICENCE", "VOTER_ID", "PASSPORT", "PAN", "OTHER"]),
-  purpose: z.string().trim().max(100).optional().nullable(),
-  hostId: z.string().min(1),
-  idPhotoPath: z.string().min(1),
-  selfiePath: z.string().optional().nullable(),
-});
+const createVisitSchema = z
+  .object({
+    visitorName: z.string().trim().min(2),
+    visitorEmail: z.string().trim().email(),
+    visitorPhone: z.string().trim().regex(/^[0-9]{10}$/),
+    idType: z.enum(["AADHAAR", "DRIVING_LICENCE", "VOTER_ID", "PASSPORT", "PAN", "OTHER"]),
+    purpose: z.string().trim().max(100).optional().nullable(),
+    hostId: z.string().min(1),
+    idPhotoPath: z.string().optional().nullable(),
+    idNumber: z.string().trim().max(30).optional().nullable(),
+    selfiePath: z.string().optional().nullable(),
+  })
+  .refine(
+    (d) => Boolean(d.idPhotoPath) || Boolean(d.idNumber && d.idNumber.length >= 4),
+    { message: "ID photo or ID number required" }
+  );
 
 async function main() {
   console.log("=== VERIFYING REQUEST CREATION WITH ALL DEMO-SCOPE FIELDS IN POSTGRESQL ===");
@@ -42,13 +48,17 @@ async function main() {
     selfiePath: "uploads/test-priya-face.jpg",
   };
   const validated = createVisitSchema.parse(rawPayload);
-  console.log("✔ Zod validation passed for all fields including visitorEmail and idType.");
+  console.log("✔ Zod validation passed for ID photo mode and all intake fields.");
 
-  // Ensure no full ID number field exists in model or schema
-  // @ts-expect-error ID number must never exist
-  if (validated.idNumber !== undefined) {
-    throw new Error("Security violation: idNumber property exists!");
-  }
+  const idNumberPayload = createVisitSchema.parse({
+    visitorName: "Kiran Verma",
+    visitorEmail: "kiran.verma@clientcorp.in",
+    visitorPhone: "9876543211",
+    idType: "AADHAAR" as const,
+    hostId: host.id,
+    idNumber: "123456789012",
+  });
+  console.log("✔ Zod validation passed for ID number mode:", idNumberPayload.idNumber);
 
   // 4. Create record in PostgreSQL
   const expiry = getExpiryDate(env.REQUEST_EXPIRY_MINUTES);
