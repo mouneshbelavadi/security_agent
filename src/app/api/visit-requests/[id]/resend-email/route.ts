@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getExpiryDate } from "@/lib/crypto";
-import { sendHostApprovalEmail, resolveRequestBaseUrl } from "@/lib/email";
-import { logAudit } from "@/lib/audit";
+import { resolveRequestBaseUrl } from "@/lib/email";
+import { notifyHostForApproval } from "@/lib/teams";
+import { logAudit, roleToActorType } from "@/lib/audit";
 import { env } from "@/lib/env";
 
 // POST /api/visit-requests/[id]/resend-email
-// Guard or Admin retries sending the host approval email
+// Guard or Admin retries sending the host approval notification (Teams or Email fallback)
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -29,7 +30,7 @@ export async function POST(
 
     if (visit.status !== "WAITING_HOST") {
       return NextResponse.json(
-        { error: `Cannot resend email for a request in status ${visit.status}.` },
+        { error: `Cannot resend notification for a request in status ${visit.status}.` },
         { status: 400 }
       );
     }
@@ -44,9 +45,10 @@ export async function POST(
     });
 
     const baseUrl = resolveRequestBaseUrl(request);
-    const emailSent = await sendHostApprovalEmail({
+    const notifyResult = await notifyHostForApproval({
       hostEmail: visit.host.email,
       hostName: visit.host.name,
+      hostDepartment: visit.host.department,
       visitorName: visit.visitorName,
       visitorPhone: visit.visitorPhone,
       purpose: visit.purpose,
@@ -55,9 +57,10 @@ export async function POST(
       expiryMinutes: env.REQUEST_EXPIRY_MINUTES,
     });
 
-    const actorType = session.role === "ADMIN" ? "ADMIN" : "GUARD";
+    const actorType = roleToActorType(session.role);
+    const isTeams = notifyResult.channel === "TEAMS";
 
-    if (emailSent) {
+    if (notifyResult.sent) {
       await db.visitRequest.update({
         where: { id: visit.id },
         data: { emailFailed: false },
@@ -68,14 +71,19 @@ export async function POST(
         visitorId: visit.visitorId,
         actorUserId: session.userId,
         actorName: session.name,
-        action: "EMAIL_RESENT_SUCCESS",
+        action: isTeams ? "TEAMS_NOTIFICATION_RESENT" : "EMAIL_RESENT_SUCCESS",
         actorType,
-        details: `Approval email resent to host ${visit.host.name} (${visit.host.email}) by ${session.name}.`,
+        details: isTeams
+          ? `Teams approval card resent for host ${visit.host.name} (${visit.host.email}) by ${session.name}.`
+          : `Approval email resent to host ${visit.host.name} (${visit.host.email}) by ${session.name}.`,
       });
 
       return NextResponse.json({
         success: true,
-        message: "Email sent to host successfully.",
+        notificationChannel: notifyResult.channel,
+        message: isTeams
+          ? "Teams approval request sent to host successfully."
+          : "Email sent to host successfully.",
         expiresAt,
       });
     } else {
@@ -89,23 +97,28 @@ export async function POST(
         visitorId: visit.visitorId,
         actorUserId: session.userId,
         actorName: session.name,
-        action: "EMAIL_RESENT_FAILED",
+        action: isTeams ? "TEAMS_NOTIFICATION_RESENT_FAILED" : "EMAIL_RESENT_FAILED",
         actorType,
-        details: `Retry approval email dispatch to ${visit.host.email} failed.`,
+        details: isTeams
+          ? `Retry Teams notification for ${visit.host.email} failed: ${notifyResult.error || "Unknown error"}.`
+          : `Retry approval email dispatch to ${visit.host.email} failed.`,
       });
 
       return NextResponse.json(
         {
           success: false,
-          error: "Email could not be sent. Please call the host.",
+          notificationChannel: notifyResult.channel,
+          error: isTeams
+            ? "Microsoft Teams notification could not be sent. Please call the host."
+            : "Email could not be sent. Please call the host.",
         },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error("Resend email error:", error);
+    console.error("Resend notification error:", error);
     return NextResponse.json(
-      { error: "Server error attempting to resend email." },
+      { error: "Server error attempting to resend host notification." },
       { status: 500 }
     );
   }

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, getAuthenticatedEmployee } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { logAudit } from "@/lib/audit";
-import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
+import { executeHostDecision } from "@/lib/host-decision";
 
 // POST /api/host/requests/[id]/deny
 export async function POST(
@@ -25,7 +24,7 @@ export async function POST(
 
     const visit = await db.visitRequest.findUnique({
       where: { id: params.id },
-      include: { host: true },
+      select: { id: true, hostId: true },
     });
 
     if (!visit) {
@@ -40,49 +39,26 @@ export async function POST(
       );
     }
 
-    const currentStatus = await checkAndExpireVisit({
-      id: visit.id,
-      visitorId: visit.visitorId,
-      status: visit.status,
-      expiresAt: visit.expiresAt,
-      otpExpiresAt: visit.otpExpiresAt,
-    });
-
-    if (currentStatus === "EXPIRED") {
-      return NextResponse.json(
-        { error: "This visit request has expired." },
-        { status: 400 }
-      );
-    }
-
-    if (currentStatus !== "WAITING_HOST") {
-      return NextResponse.json(
-        { error: `Request cannot be denied (current status: ${currentStatus}).` },
-        { status: 400 }
-      );
-    }
-
-    await db.visitRequest.update({
-      where: { id: visit.id },
-      data: {
-        status: "DENIED",
-      },
-    });
-
-    await logAudit({
-      visitRequestId: visit.id,
-      visitorId: visit.visitorId,
+    const result = await executeHostDecision({
+      visitId: visit.id,
+      decision: "DENY",
       actorUserId: session.userId,
       actorName: employee.name,
-      action: "STATUS_DENIED_BY_EMPLOYEE",
-      actorType: "EMPLOYEE",
-      details: `Host employee ${employee.name} (${employee.email}) denied visitor entry.`,
+      actorEmail: employee.email,
+      source: "WEB",
     });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error, status: result.status },
+        { status: result.httpStatus }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      status: "DENIED",
-      message: "Visitor request denied.",
+      status: result.status,
+      message: result.message,
     });
   } catch (error) {
     console.error("Host deny error:", error);

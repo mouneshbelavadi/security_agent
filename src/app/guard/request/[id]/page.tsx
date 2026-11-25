@@ -38,6 +38,7 @@ interface RequestDetails {
   hostDepartment: string;
   hostEmail?: string;
   emailFailed?: boolean;
+  notificationChannel?: "TEAMS" | "EMAIL";
   otpAttempts: number;
   maxAttempts: number;
   createdAt: string;
@@ -308,7 +309,11 @@ export default function GuardRequestStatusPage() {
               title={`${t("waitingApprovalFrom")} ${details.hostName}`}
               description={
                 details.emailFailed
-                  ? `${details.hostDepartment}. Email delivery failed.`
+                  ? details.notificationChannel === "TEAMS"
+                    ? `${details.hostDepartment}. Teams notification delivery failed.`
+                    : `${details.hostDepartment}. Email delivery failed.`
+                  : details.notificationChannel === "TEAMS"
+                  ? `${details.hostDepartment}. Microsoft Teams approval request sent.`
                   : `${details.hostDepartment}. Email sent to host.`
               }
             >
@@ -322,14 +327,16 @@ export default function GuardRequestStatusPage() {
               )}
             </StatusBanner>
 
-            {/* Email Dispatch Failure Alert with Retry */}
+            {/* Dispatch Failure Alert with Retry */}
             {details.emailFailed && (
               <div className="p-4 rounded border-2 border-danger-border bg-danger-bg space-y-3">
                 <div className="flex items-start gap-3">
                   <AlertOctagon className="w-6 h-6 text-danger shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <h4 className="text-base font-bold text-danger">
-                      {t("emailCouldNotBeSent")}
+                      {details.notificationChannel === "TEAMS"
+                        ? "Microsoft Teams alert could not be sent. Please retry or call the host."
+                        : t("emailCouldNotBeSent")}
                     </h4>
                     <p className="text-sm text-ink">
                       Host: <strong>{details.hostName}</strong> ({details.hostDepartment})

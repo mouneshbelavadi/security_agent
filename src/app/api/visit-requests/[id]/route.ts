@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
+import { isTeamsNotificationEnabled } from "@/lib/teams";
 
 export async function GET(
   request: Request,
@@ -71,6 +72,7 @@ export async function GET(
       hostDepartment: visit.host.department,
       hostEmail: visit.host.email,
       emailFailed: visit.emailFailed,
+      notificationChannel: isTeamsNotificationEnabled() ? "TEAMS" : "EMAIL",
       otpAttempts: visit.otpAttempts,
       maxAttempts: 3,
       createdAt: visit.createdAt,

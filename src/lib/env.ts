@@ -17,6 +17,11 @@ const envSchema = z.object({
   SMTP_PASS: z.string().default(""),
   MAIL_FROM: z.string().default("VS Techsol Gate Security <gate-security@vstechsol.local>"),
   OTP_PROVIDER: z.enum(["email", "host_screen", "sms_gateway"]).default("email"),
+  HOST_NOTIFICATION_MODE: z.enum(["auto", "teams", "email"]).default("auto"),
+  TEAMS_WORKFLOW_URL: z.string().default(""),
+  TEAMS_WEBHOOK_SECRET: z
+    .string()
+    .default("vstechsol_teams_callback_secret_2026"),
   REQUEST_EXPIRY_MINUTES: z.coerce.number().default(10),
   OTP_EXPIRY_MINUTES: z.coerce.number().default(5),
   DATABASE_URL: z.string().default(""),
@@ -36,6 +41,9 @@ export const env = envSchema.parse({
   SMTP_PASS: process.env.SMTP_PASS,
   MAIL_FROM: process.env.MAIL_FROM,
   OTP_PROVIDER: process.env.OTP_PROVIDER,
+  HOST_NOTIFICATION_MODE: process.env.HOST_NOTIFICATION_MODE,
+  TEAMS_WORKFLOW_URL: process.env.TEAMS_WORKFLOW_URL,
+  TEAMS_WEBHOOK_SECRET: process.env.TEAMS_WEBHOOK_SECRET,
   REQUEST_EXPIRY_MINUTES: process.env.REQUEST_EXPIRY_MINUTES,
   OTP_EXPIRY_MINUTES: process.env.OTP_EXPIRY_MINUTES,
   DATABASE_URL: process.env.DATABASE_URL,

@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, getAuthenticatedEmployee } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { generateOtp, hashOtp, getExpiryDate } from "@/lib/crypto";
-import { sendVisitorOtpEmail } from "@/lib/email";
-import { logAudit } from "@/lib/audit";
-import { checkAndExpireVisit } from "@/lib/visit-lifecycle";
-import { env } from "@/lib/env";
+import { executeHostDecision } from "@/lib/host-decision";
 
 // POST /api/host/requests/[id]/approve
 export async function POST(
@@ -28,7 +24,7 @@ export async function POST(
 
     const visit = await db.visitRequest.findUnique({
       where: { id: params.id },
-      include: { host: true },
+      select: { id: true, hostId: true },
     });
 
     if (!visit) {
@@ -43,74 +39,27 @@ export async function POST(
       );
     }
 
-    const currentStatus = await checkAndExpireVisit({
-      id: visit.id,
-      visitorId: visit.visitorId,
-      status: visit.status,
-      expiresAt: visit.expiresAt,
-      otpExpiresAt: visit.otpExpiresAt,
-    });
-
-    if (currentStatus === "EXPIRED") {
-      return NextResponse.json(
-        { error: "This visit request has expired." },
-        { status: 400 }
-      );
-    }
-
-    if (currentStatus !== "WAITING_HOST") {
-      return NextResponse.json(
-        { error: `Request cannot be approved (current status: ${currentStatus}).` },
-        { status: 400 }
-      );
-    }
-
-    // 1. Generate 6-digit OTP and hash it (never store plain OTP in database)
-    const otp = generateOtp();
-    const otpHash = hashOtp(otp);
-    const otpExpiresAt = getExpiryDate(env.OTP_EXPIRY_MINUTES);
-
-    // 2. Update VisitRequest status to APPROVED
-    await db.visitRequest.update({
-      where: { id: visit.id },
-      data: {
-        status: "APPROVED",
-        approvedAt: new Date(),
-        otpHash,
-        otpExpiresAt,
-      },
-    });
-
-    // 3. Send 6-digit OTP directly to visitor's email via Gmail SMTP
-    const otpEmailSent = await sendVisitorOtpEmail({
-      visitorEmail: visit.visitorEmail,
-      visitorName: visit.visitorName,
-      hostName: visit.host.name,
-      hostDepartment: visit.host.department,
-      otp,
-      expiryMinutes: env.OTP_EXPIRY_MINUTES,
-    });
-
-    // 4. Log audit trail
-    await logAudit({
-      visitRequestId: visit.id,
-      visitorId: visit.visitorId,
+    const result = await executeHostDecision({
+      visitId: visit.id,
+      decision: "APPROVE",
       actorUserId: session.userId,
       actorName: employee.name,
-      action: otpEmailSent ? "STATUS_APPROVED_OTP_EMAILED" : "STATUS_APPROVED_OTP_EMAIL_FAILED",
-      actorType: "EMPLOYEE",
-      details: otpEmailSent
-        ? `Host employee ${employee.name} (${employee.email}) approved visitor entry. 6-digit OTP emailed to ${visit.visitorEmail}.`
-        : `Host employee ${employee.name} (${employee.email}) approved visitor entry, but OTP email dispatch to ${visit.visitorEmail} failed.`,
+      actorEmail: employee.email,
+      source: "WEB",
     });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error, status: result.status },
+        { status: result.httpStatus }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      status: "APPROVED",
-      otpEmailSent,
-      message: otpEmailSent
-        ? `Visitor approved. 6-digit code sent via email to ${visit.visitorEmail}.`
-        : `Visitor approved, but failed to send OTP email to ${visit.visitorEmail}. Please verify SMTP settings.`,
+      status: result.status,
+      otpEmailSent: result.otpEmailSent,
+      message: result.message,
     });
   } catch (error) {
     console.error("Host approve error:", error);

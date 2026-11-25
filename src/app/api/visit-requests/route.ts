@@ -6,7 +6,8 @@ import {
   isValidIndianPhone,
   normalizeIndianPhone,
 } from "@/lib/crypto";
-import { sendHostApprovalEmail, resolveRequestBaseUrl } from "@/lib/email";
+import { resolveRequestBaseUrl } from "@/lib/email";
+import { notifyHostForApproval } from "@/lib/teams";
 import { logAudit, AuditActorType } from "@/lib/audit";
 import { resolveOrUpsertVisitor } from "@/lib/visit-lifecycle";
 import { env } from "@/lib/env";
@@ -146,9 +147,10 @@ export async function POST(request: Request) {
     });
 
     const baseUrl = resolveRequestBaseUrl(request);
-    const emailSent = await sendHostApprovalEmail({
+    const notifyResult = await notifyHostForApproval({
       hostEmail: host.email,
       hostName: host.name,
+      hostDepartment: host.department,
       visitorName: visit.visitorName,
       visitorPhone: visit.visitorPhone,
       purpose: visit.purpose,
@@ -157,8 +159,12 @@ export async function POST(request: Request) {
       expiryMinutes: env.REQUEST_EXPIRY_MINUTES,
     });
 
-    if (!emailSent) {
-      console.warn(`[WARN] Approval email dispatch failed for visitRequest ${visit.id}`);
+    const isTeams = notifyResult.channel === "TEAMS";
+
+    if (!notifyResult.sent) {
+      console.warn(
+        `[WARN] Host ${notifyResult.channel} dispatch failed for visitRequest ${visit.id}: ${notifyResult.error || ""}`
+      );
       await db.visitRequest.update({
         where: { id: visit.id },
         data: { emailFailed: true },
@@ -166,17 +172,21 @@ export async function POST(request: Request) {
       await logAudit({
         visitRequestId: visit.id,
         visitorId,
-        action: "EMAIL_DELIVERY_FAILED",
+        action: isTeams ? "TEAMS_NOTIFICATION_FAILED" : "EMAIL_DELIVERY_FAILED",
         actorType: "SYSTEM",
-        details: `Initial approval email dispatch to ${host.email} failed.`,
+        details: isTeams
+          ? `Teams approval card dispatch for ${host.email} failed: ${notifyResult.error || "Unknown error"}.`
+          : `Initial approval email dispatch to ${host.email} failed.`,
       });
     } else {
       await logAudit({
         visitRequestId: visit.id,
         visitorId,
-        action: "EMAIL_DELIVERY_SUCCESS",
+        action: isTeams ? "TEAMS_NOTIFICATION_SENT" : "EMAIL_DELIVERY_SUCCESS",
         actorType: "SYSTEM",
-        details: `Initial approval email delivered to ${host.email}.`,
+        details: isTeams
+          ? `Teams approval card dispatched to ${host.name} (${host.email}).`
+          : `Initial approval email delivered to ${host.email}.`,
       });
     }
 
@@ -191,7 +201,8 @@ export async function POST(request: Request) {
       visitorName: visit.visitorName,
       visitorPhone: visit.visitorPhone,
       expiresAt: visit.expiresAt,
-      emailFailed: !emailSent,
+      notificationChannel: notifyResult.channel,
+      emailFailed: !notifyResult.sent,
     });
   } catch (error) {
     console.error("Create visit request error:", error);
